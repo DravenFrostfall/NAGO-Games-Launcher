@@ -1,6 +1,8 @@
 # NAGO Launcher
 
-A Linux game launcher for Native, Proton, GOG, and Steam games. Built with Python and PyQt6.
+Smooth to use, good looking GUI, light and compact, and above all, works without any issues.
+
+A Linux game launcher for Native, Proton, GOG, and Steam games. Built with Python and PyQt6. In active development.
 
 ![NAGO Launcher](icons/nago-logo.png)
 
@@ -9,18 +11,25 @@ A Linux game launcher for Native, Proton, GOG, and Steam games. Built with Pytho
 ## Features
 
 - **Multiple game types** — Native Linux, Proton (via umu-launcher), GOG, and Steam
-- **Cover art** — automatic fetching from SteamGridDB
-- **Import** — import games from Heroic, Lutris, and Steam libraries
+- **Cover art** — automatic fetching from SteamGridDB and VNDB
+- **Import** — import games from Steam, Heroic, and Lutris libraries
+- **Extended GOG support** — breadcrumb-based install detection, Heroic and Lutris GOG import
+- **Extended Visual Novel support** — Japanese and Western VNs, VNDB cover search, dedicated VN game type
+- **AI upscaling** — per-game AI upscale toggle with model selection (for Visual Novels)
 - **Per-game Wine prefixes** — each game gets its own isolated prefix
 - **Save backups** — ludusavi integration for backup and restore
-- **Upscaler detection** — detects FSR 4, FSR 3.1, FSR 2, DLSS, and XeSS DLLs in game directories
+- **In-game upscaler detection** — detects FSR 4, FSR 3.1, FSR 2, DLSS, and XeSS DLLs in game directories
 - **Proton management** — auto-detects all installed Proton versions (GE-Proton, CachyOS Proton, Steam Proton, system-installed)
-- **umu-launcher integration** — all Proton/GOG games run through umu unconditionally
-- **Auto-installs tools** — umu-launcher, winetricks, and ludusavi download automatically on first run
+- **umu-launcher integration** — all Proton/GOG games run through umu unconditionally; auto-installs on first run
 - **Sync support** — esync, fsync, and ntsync per game
 - **FSR 4 / OptiScaler** — per-game FSR environment variable controls
 - **Custom launch options** — pre/post launch commands, environment variable overrides
+- **Categories** — organize your library with custom categories
+- **Drag and drop** — reorder game cards by dragging
+- **Light/Dark theme** — toggle between themes
 - **Dark themed UI** — custom Qt stylesheet, Phosphor icon font
+- Built primarily for **KDE Wayland**, but should work on all desktop environments (more testing needed)
+- No direct installer yet
 
 ---
 
@@ -96,7 +105,7 @@ Edit the `Exec=` and `Icon=` lines in the `.desktop` file to point to your insta
 
 - All game data, prefixes, covers, and logs are stored under `~/.local/share/nago-launcher/`
 - No hardcoded paths — NAGO respects `XDG_DATA_HOME` and runs from any location
-- Tested on Fedora (KDE Wayland) and Arch (Hyprland)
+- Tested on Fedora (KDE Wayland) and Arch Linux (Hyprland)
 
 ---
 
