@@ -33,6 +33,34 @@ A Linux game launcher for Native, Proton, GOG, and Steam games. Built with Pytho
 
 ---
 
+## Screenshots
+
+<img src="screenshots/MAIN-Screenshot_20260623_220227.png" width="800"/>
+
+*Main library view*
+
+<img src="screenshots/Screenshot_20260623_214649.png" width="800"/>
+
+*Edit Game — General tab*
+
+<img src="screenshots/Screenshot_20260623_214717.png" width="800"/>
+
+*Edit Game — Compatibility tab*
+
+<img src="screenshots/Screenshot_20260623_214930.png" width="800"/>
+
+*Add Game — Proton*
+
+<img src="screenshots/Screenshot_20260623_215039.png" width="800"/>
+
+*Import Games — Steam / Heroic / Lutris*
+
+<img src="screenshots/Screenshot_20260623_215137.png" width="800"/>
+
+*Settings*
+
+---
+
 ## Requirements
 
 ### System packages
