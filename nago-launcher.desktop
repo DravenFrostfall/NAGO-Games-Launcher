@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=NAGO Launcher
+Comment=Linux game launcher with SteamGridDB, Proton, and umu support
+# EDIT: replace /path/to with the actual folder where nago-launcher.py lives
+Exec=python3 /home/USER/.local/share/nago-launcher/nago-launcher.py
+Icon=/home/USER/.local/share/nago-launcher/icons/nago-logo.png
+Type=Application
+Categories=Game;
+Terminal=true
+
+# Startup notification — tells KDE to dismiss the bouncing cursor as soon
+# as the window appears, and match the taskbar entry to the running process.
+# StartupWMClass must match the string passed to app.setDesktopFileName().
+StartupNotify=true
+StartupWMClass=nago-launcher

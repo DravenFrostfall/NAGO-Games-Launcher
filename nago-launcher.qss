@@ -1,0 +1,1051 @@
+QMainWindow, QWidget#root {
+    background: __T_BG__;
+    border-radius: 10px;
+    border: 1px solid __T_BORDER__;
+}
+QWidget {
+    color: __T_TEXT__;
+    font-family: 'Segoe UI', 'Ubuntu', 'Noto Sans', sans-serif;
+    font-size: 14px;
+}
+
+/* ── Sidebar ── */
+QWidget#sidebar {
+    background: __T_SIDEBAR_BG__;
+    border-top: 1px solid __T_BORDER__;
+    border-left: 1px solid __T_BORDER__;
+    border-bottom: 1px solid __T_BORDER__;
+    border-right: 1px solid __T_BORDER3__;
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+}
+QPushButton#sideBtn {
+    background: transparent;
+    border: none;
+    color: __T_TEXT4__;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-align: left;
+    padding: 10px 14px;
+    border-radius: 8px;
+}
+QPushButton#sideBtn:hover {
+    background: __T_HOVER2__;
+    color: __T_TEXT2__;
+}
+QPushButton#sideBtn:checked {
+    background: transparent;
+    color: __ACCENT2__;
+}
+QPushButton#sideSubBtn {
+    background: transparent;
+    border: none;
+    color: __T_TEXT5__;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    padding: 7px 10px 7px 32px;
+    border-radius: 6px;
+}
+QPushButton#sideSubBtn:hover {
+    background: __T_HOVER2__;
+    color: __T_TEXT2__;
+}
+QPushButton#sideSubBtn:checked {
+    background: transparent;
+    color: __ACCENT2__;
+    padding-left: 32px;
+}
+
+/* ── Tab widget (used in the Edit Game dialog) ── */
+QTabWidget#dlgTabs::pane {
+    border: none;
+    background: transparent;
+    margin-top: 4px;
+}
+QTabWidget#dlgTabs > QTabBar {
+    background: transparent;
+    qproperty-drawBase: 0;
+}
+QTabWidget#dlgTabs QTabBar::tab {
+    background: transparent;
+    color: __T_TEXT4__;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 18px;
+    margin-right: 4px;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+QTabWidget#dlgTabs QTabBar::tab:hover { color: __T_TEXT2__; }
+QTabWidget#dlgTabs QTabBar::tab:selected {
+    color: __ACCENT2__;
+    border-bottom: 2px solid __ACCENT__;
+}
+
+
+/* ── Settings island ── */
+QFrame#settingsIsland {
+    background: transparent;
+    border: none;
+}
+QWidget#settingsTabBar {
+    background: transparent;
+}
+QFrame#settingsTabDivider {
+    background: __T_BORDER3__;
+    border: none;
+    margin: 0px;
+}
+QPushButton#settingsTabBtn {
+    background: transparent;
+    border: none;
+    border-top: 2px solid transparent;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+    padding: 9px 20px 10px 20px;
+    color: __T_TEXT6__;
+    font-size: 14px;
+    font-weight: 600;
+}
+QPushButton#settingsTabBtn:hover {
+    color: __T_TEXT3__;
+    background: __T_BTN_HOVER_OVERLAY__;
+}
+QPushButton#settingsTabBtn:checked {
+    background: __T_SIDEBAR_BG__;
+    border: 1px solid __T_BORDER__;
+    border-bottom: 2px solid transparent;
+    border-top: 2px solid __ACCENT__;
+    padding: 9px 20px 12px 20px;
+    margin-bottom: -4px;
+    color: __T_TEXT__;
+}
+
+/* ── Top bar ── */
+/* ── Settings page themed widgets ── */
+QFrame#settingsSep {
+    background: __T_BORDER2__;
+    border: none;
+    max-height: 1px;
+    min-height: 1px;
+    margin: 4px 0;
+}
+QLabel#settingsMuted {
+    font-size: 12px;
+    color: __T_TEXT4__;
+    background: transparent;
+}
+QLabel#settingsPill {
+    font-size: 11px;
+    color: __T_PILL_FG__;
+    background: __T_PILL_BG__;
+    border-radius: 8px;
+    padding: 1px 8px;
+}
+QLabel#settingsPill[pillState="ok"] {
+    color: __T_PILL_FG__;
+    background: __T_PILL_BG__;
+}
+QLabel#settingsPill[pillState="warn"] {
+    color: __T_PILL_WARN_FG__;
+    background: __T_PILL_WARN_BG__;
+}
+QLabel#settingsPill[pillState="error"] {
+    color: __T_PILL_ERR_FG__;
+    background: __T_PILL_ERR_BG__;
+}
+QLabel#settingsPill[pillState="pending"] {
+    color: __T_PILL_PEND_FG__;
+    background: __T_PILL_PEND_BG__;
+}
+
+QPushButton#addGameBtn {
+    background: transparent;
+    color: __T_TEXT3__;
+    border: none;
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 6px;
+}
+QPushButton#addGameBtn:hover {
+    background: __T_SURFACE_HOVER__;
+}
+QPushButton#addGameBtn:pressed {
+    background: __T_BORDER2__;
+}
+
+QWidget#rightSection {
+    background: transparent;
+}
+
+QWidget#topbar {
+    background: __T_TOPBAR_BG__;
+    border-top: 1px solid __T_BORDER__;
+    border-right: 1px solid __T_BORDER__;
+    border-bottom: 1px solid __T_BORDER3__;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 10px;
+}
+
+/* ── Search ── */
+QLineEdit#search {
+    background: __T_SURFACE__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+    padding: 7px 14px;
+    color: __T_TEXT__;
+    font-size: 14px;
+    selection-background-color: __ACCENT__;
+}
+QLineEdit#search:focus {
+    border: 1px solid __ACCENT__;
+    background: __T_SURFACE_HOVER__;
+}
+
+/* ── Buttons ── */
+QPushButton#primary {
+    background: __ACCENT__;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 14px;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+}
+QWidget QPushButton#primary { color: #ffffff; }
+QWidget QWidget QPushButton#primary { color: #ffffff; }
+QPushButton#primary:hover {
+    background: __ACCENT_LIGHT__;
+}
+QPushButton#primary:pressed {
+    background: __ACCENT_DARK__;
+}
+QPushButton#secondary:pressed {
+    background: __T_TOPBAR_BG__;
+    color: __T_TEXT__;
+    border-color: __T_BORDER_H__;
+}
+QPushButton#danger:pressed {
+    background: __T_DANGER_PRESS__;
+    border-color: #c85050;
+}
+QPushButton#sideBtn:pressed {
+    background: __T_TOPBAR_BG__;
+}
+QPushButton#sideSubBtn:pressed {
+    background: __T_TOPBAR_BG__;
+}
+QPushButton#catBtn:pressed {
+    background: __T_TOPBAR_BG__;
+}
+QPushButton#addCatBtn:pressed {
+    background: __T_TOPBAR_BG__;
+}
+QPushButton#segActive:pressed {
+    background: __ACCENT_DARK__;
+}
+QPushButton#segInactive:pressed {
+    background: __T_HOVER2__;
+}
+QPushButton#envDelBtn:pressed {
+    background: __T_ENVDEL_PRESS__;
+    border-color: #f87171;
+}
+QPushButton#winBtn:pressed {
+    background: __T_WINBTN_PRESS__;
+}
+QPushButton#winCloseBtn:pressed {
+    background: #be1840;
+}
+QPushButton#secondary {
+    background: __T_SURFACE__;
+    color: __T_TEXT7__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 13px;
+}
+QPushButton#secondary:hover {
+    background: __T_HOVER__;
+    color: __T_TEXT__;
+    border-color: __T_TEXT6__;
+}
+QPushButton#secondary:checked {
+    background: __T_SURFACE_CHK__;
+    color: __T_TEXT__;
+    border-color: __T_SEC_CHK_BORDER__;
+}
+QPushButton#secondary:disabled {
+    background: __T_SIDEBAR_BG__;
+    color: __T_TEXT6__;
+    border-color: __T_BORDER3__;
+}
+QPushButton#primary:disabled {
+    background: __T_SURFACE__;
+    color: __T_TEXT_DISABLED__;
+    border-color: transparent;
+}
+QPushButton#danger {
+    background: __T_SURFACE__;
+    color: #f87171;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 13px;
+}
+QPushButton#danger:hover {
+    background: __T_DANGER_HOVER__;
+    border-color: #f87171;
+}
+
+/* ── Game cards ── */
+QFrame#gameCard {
+    background: __T_CARD_BG__;
+    border: 2px solid __T_BORDER2__;
+    border-radius: __CARD_RADIUS__;
+}
+QFrame#gameCard:hover {
+    background: __T_CARD_HOVER__;
+}
+
+/* ── Scrollbar ── */
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+QScrollBar:vertical {
+    background: transparent;
+    width: 6px;
+    margin: 0;
+}
+QScrollBar::handle:vertical {
+    background: __T_SCROLLBAR__;
+    border-radius: 3px;
+    min-height: 24px;
+}
+QScrollBar::handle:vertical:hover { background: __ACCENT__; }
+QScrollBar::handle:vertical:pressed { background: __ACCENT_DARK__; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
+
+/* ── Dialogs ── */
+QDialog {
+    background: transparent;
+    border: none;
+}
+QFrame#dialogRoot {
+    background: __T_DIALOG_BG__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 12px;
+}
+QLabel#dlgTitle {
+    font-size: 18px;
+    font-weight: 700;
+    color: __T_TEXT__;
+}
+QLabel#sectionLabel {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: __T_TEXT4__;
+}
+QLabel#cardTitle {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: __T_TEXT8__;
+    padding-bottom: 2px;
+}
+QLabel#cardTitle:disabled {
+    color: __T_TEXT_DISABLED__;
+}
+/* Name input in header — plain text, no border ever */
+QTextEdit#dlgNameInput {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0px;
+    color: __T_TEXT__;
+    font-size: 22px;
+    font-weight: 700;
+    selection-background-color: #3b5f8a;
+}
+QTextEdit#dlgNameInput:hover {
+    background: transparent;
+    border: none;
+}
+QTextEdit#dlgNameInput:focus {
+    background: transparent;
+    border: none;
+}
+QTextEdit#dlgNameInput::placeholder {
+    color: __T_PLACEHOLDER__;
+}
+
+QLineEdit#dlgInput, QComboBox#dlgCombo {
+    background: __T_SURFACE2__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: __T_TEXT__;
+    font-size: 14px;
+    selection-background-color: __ACCENT__;
+}
+QLineEdit#dlgInputMono {
+    background: __T_SURFACE2__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: __T_TEXT2__;
+    font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    selection-background-color: __ACCENT__;
+}
+QLineEdit#dlgInputMono:focus {
+    border-color: __ACCENT__;
+    background: __T_SURFACE2__;
+}
+QLineEdit#dlgInput:focus, QComboBox#dlgCombo:focus {
+    border-color: __ACCENT__;
+    background: __T_SURFACE2__;
+}
+QPushButton#envDelBtn {
+    background: transparent;
+    color: __T_TEXT4__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 6px;
+    font-size: 14px;
+    padding: 0px;
+}
+QPushButton#envDelBtn:hover {
+    color: #f87171;
+    border-color: #f87171;
+    background: transparent;
+}
+QWidget#envGrid {
+    border: 1px solid __T_BORDER__;
+    border-radius: 8px;
+    background: __T_SIDEBAR_BG__;
+}
+QFrame#envGridHeader {
+    background: __T_ENV_HDR_BG__;
+    border-bottom: 1px solid __T_BORDER__;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+QWidget#envGridRow {
+    border-bottom: 1px solid __T_ENV_ROW_BDR__;
+}
+QWidget#envGridRow:last-child {
+    border-bottom: none;
+}
+QComboBox#dlgCombo:disabled,
+QLineEdit#dlgInput:disabled,
+QLineEdit#dlgInputMono:disabled {
+    color: __T_TEXT6__;
+    background: __T_SIDEBAR_BG__;
+    border-color: __T_BORDER3__;
+}
+QComboBox#dlgCombo::drop-down { border: none; width: 28px; subcontrol-origin: padding; subcontrol-position: right center; }
+
+/* Cover picker source segmented toggle */
+QFrame#sourceSegment {
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+    background: __T_SURFACE__;
+}
+QPushButton#segActive {
+    background: __ACCENT__;
+    color: #ffffff;
+    border: none;
+    border-radius: 7px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 600;
+}
+QPushButton#segInactive {
+    background: transparent;
+    color: __T_TEXT7__;
+    border: none;
+    border-radius: 7px;
+    padding: 5px 14px;
+    font-size: 13px;
+}
+QPushButton#segInactive:hover {
+    color: __T_TEXT__;
+    background: __T_SEG_HOVER__;
+}
+QComboBox#dlgCombo QAbstractItemView {
+    background: __T_COMBO_BG__;
+    border: 1px solid __T_COMBO_BORDER__;
+    border-radius: 8px;
+    selection-background-color: __ACCENT_BG2__;
+    color: __T_TEXT__;
+    outline: none;
+    padding: 4px 0;
+}
+QComboBox#dlgCombo QAbstractItemView::separator {
+    height: 2px;
+    background: __T_SEPARATOR__;
+    margin: 4px 10px;
+}
+
+/* ── Settings ── */
+QWidget#settingsPage { background: transparent; }
+QFrame#settingsSection {
+    background: __T_SECTION_BG__;
+    border: 1px solid __T_BORDER__;
+    border-radius: 10px;
+    padding: 4px;
+}
+QLabel#settingsTitle {
+    font-size: 23px;
+    font-weight: 700;
+    color: __T_TEXT__;
+}
+
+/* ── Misc ── */
+QProgressBar {
+    background: __T_SURFACE__;
+    border: none;
+    border-radius: 3px;
+    height: 4px;
+    color: transparent;
+}
+QProgressBar::chunk {
+    background: __ACCENT__;
+    border-radius: 3px;
+}
+QCheckBox { spacing: 10px; color: __T_TEXT2__; font-size: 14px; }
+QCheckBox::indicator {
+    width: 18px; height: 18px;
+    border: 1.5px solid __T_TEXT6__;
+    border-radius: 5px;
+    background: __T_SURFACE__;
+}
+QCheckBox::indicator:hover {
+    border-color: __ACCENT2__;
+    background: __T_SURFACE_HOVER__;
+}
+QCheckBox::indicator:checked {
+    background: __ACCENT__;
+    border: 1.5px solid __ACCENT__;
+}
+QCheckBox::indicator:checked:hover {
+    background: __ACCENT2__;
+    border-color: __ACCENT2__;
+}
+QCheckBox::indicator:disabled {
+    border-color: __T_BORDER3__;
+    background: __T_SIDEBAR_BG__;
+}
+QCheckBox:disabled { color: __T_TEXT6__; }
+QLabel#statusBar {
+    color: __T_TEXT6__;
+    font-size: 14px;
+    padding: 6px 16px;
+    border-top: 1px solid __T_BORDER3__;
+    border-right: 1px solid __T_BORDER__;
+    border-bottom: 1px solid __T_BORDER__;
+    background: __T_BG__;
+    border-bottom-right-radius: 10px;
+}
+QFrame#coverResult {
+    background: __T_SURFACE__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+}
+QFrame#coverResult:hover {
+    border: 2px solid __ACCENT__;
+    background: __T_SURFACE_HOVER__;
+}
+QLabel#emptyTitle {
+    font-size: 21px;
+    font-weight: 700;
+    color: __T_EMPTY__;
+}
+QLabel#emptyHint {
+    font-size: 14px;
+    color: __T_EMPTY__;
+}
+
+/* ── Window controls ── */
+QPushButton#winBtn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: __T_TEXT7__;
+    font-size: 18px;
+    font-weight: 600;
+}
+QPushButton#winBtn:hover {
+    background: __T_SURFACE_HOVER__;
+    color: __T_TEXT__;
+}
+QPushButton#winCloseBtn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: __T_TEXT7__;
+    font-size: 18px;
+    font-weight: 600;
+}
+QPushButton#winCloseBtn:hover {
+    background: #e11d48;
+    color: #ffffff;
+}
+
+/* ── Categories ── */
+QLabel#sideSection {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: __T_TEXT6__;
+    padding: 4px 14px 2px 14px;
+}
+QFrame#sideSeparator {
+    background: __T_SEPARATOR__;
+    max-height: 1px;
+    min-height: 1px;
+    border: none;
+    margin: 6px 8px;
+}
+QPushButton#catBtn {
+    background: transparent;
+    border: none;
+    color: __T_TEXT3__;
+    font-size: 17px;
+    font-weight: 400;
+    text-align: left;
+    padding: 8px 14px 8px 20px;
+    border-radius: 8px;
+}
+QPushButton#catBtn:hover {
+    background: __T_HOVER2__;
+    color: __T_TEXT2__;
+}
+QPushButton#catBtn:checked {
+    background: transparent;
+    color: __ACCENT2__;
+    font-weight: 600;
+}
+QPushButton#addCatBtn {
+    background: transparent;
+    border: none;
+    color: __T_TEXT5__;
+    font-size: 15px;
+    text-align: left;
+    padding: 6px 14px;
+    border-radius: 8px;
+}
+QPushButton#addCatBtn:hover {
+    background: __T_HOVER2__;
+    color: __T_TEXT3__;
+}
+/* ── Phosphor icon font ── */
+/* Applied to any widget with objectName "phIcon" — renders Phosphor glyphs */
+QPushButton#phIcon, QLabel#phIcon {
+    font-family: 'Phosphor';
+    background: transparent;
+    border: none;
+}
+
+/* ── Card size slider ── */
+QSlider::groove:horizontal {
+    background: __T_BORDER3__;
+    height: 4px;
+    border-radius: 2px;
+}
+QSlider::sub-page:horizontal {
+    background: __ACCENT__;
+    height: 4px;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    background: __T_TEXT__;
+    border: 2px solid __ACCENT__;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+QSlider::handle:horizontal:hover {
+    background: __ACCENT2__;
+    border-color: __ACCENT2__;
+}
+
+/* ── Read-only field label (e.g. locked Steam game name in Edit flow) ── */
+QLabel#dlgReadOnly {
+    background: __T_SURFACE2__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: __T_TEXT2__;
+    font-size: 14px;
+}
+
+/* ── Hint labels ── */
+QLabel#fieldHint {
+    color: __T_TEXT4__;
+    font-size: 11px;
+    background: transparent;
+}
+QLabel#fieldHintSm {
+    color: __T_TEXT4__;
+    font-size: 12px;
+    background: transparent;
+}
+QLabel#mutedHint {
+    color: __T_MUTED__;
+    font-size: 12px;
+    background: transparent;
+}
+
+/* ── Log viewer ── */
+QTextEdit#logView {
+    background: __T_LOG_BG__;
+    color: __T_LOG_TEXT__;
+    font-family: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+    font-size: 13px;
+    border: 1px solid __T_LOG_BORDER__;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+/* ── Tooltip ── */
+QToolTip {
+    background: __T_TOOLTIP_BG__;
+    color: __T_TEXT__;
+    border: 1px solid __T_BORDER__;
+    padding: 5px 8px;
+    font-size: 14px;
+    font-family: 'Segoe UI', 'Ubuntu', 'Noto Sans', sans-serif;
+}
+
+/* ── Topbar page title ── */
+QLabel#pageTitle {
+    font-size: 18px;
+    font-weight: 700;
+    color: __T_TEXT__;
+    background: transparent;
+}
+
+/* ── Sidebar logo ── */
+QLabel#logoNago {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: __T_TEXT__;
+    margin-bottom: -6px;
+    background: transparent;
+}
+QLabel#logoSub {
+    font-size: 16px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    color: __T_TEXT4__;
+    background: transparent;
+}
+QLabel#sidebarVersion {
+    color: __T_TEXT6__;
+    font-size: 12px;
+    padding: 8px 8px 4px 8px;
+    border-top: 1px solid __T_BORDER2__;
+    background: transparent;
+}
+
+/* ── Game card overlays ── */
+QLabel#cardNameLabel {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f4f4f5;
+    background: transparent;
+}
+QLabel#runningDot {
+    background: rgba(15,35,20,0.92);
+    border: 1px solid rgba(34,197,94,0.45);
+    color: #4ade80;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 6px;
+}
+QLabel#playtimeBadge {
+    background: rgba(10,10,14,0.70);
+    color: #e4e4e7;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 7px;
+    border-radius: 5px;
+}
+
+/* ── Dialog card stats ── */
+QFrame#statWidget {
+    background: __T_STAT_BG__;
+    border-radius: 6px;
+}
+QLabel#statLabel {
+    color: __T_TEXT6__;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    background: transparent;
+}
+QLabel#statValue {
+    color: __T_TEXT__;
+    font-size: 13px;
+    font-weight: 600;
+    background: transparent;
+}
+
+/* ── Dialog category badge ── */
+QLabel#catBadge {
+    color: __T_CAT_BADGE_FG__;
+    background: __T_CAT_BADGE_BG__;
+    border-radius: 5px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* ── Runner badge (edit dialog) ── */
+/* Colors set via inline style — badge is dynamic per game type */
+
+/* ── Runner segmented selector frame ── */
+QFrame#runnerSegFrame {
+    background: __T_SEG_BG__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 7px;
+}
+
+/* ── Combo popup items ── */
+QLabel#comboItemNormal {
+    color: __T_TEXT__;
+    font-size: 13px;
+    background: transparent;
+}
+QLabel#comboItemCurrent {
+    font-size: 13px;
+    background: transparent;
+    /* color set inline — needs accent value */
+}
+QLabel#comboItemDisabled {
+    color: __T_TEXT6__;
+    font-size: 13px;
+    background: transparent;
+}
+QLabel#comboItemHighlight {
+    color: __T_TEXT__;
+    font-size: 13px;
+    background: __T_HOVER2__;
+    border-radius: 6px;
+    margin: 0 4px;
+}
+QFrame#comboSepLine {
+    background: __T_BORDER2__;
+    border: none;
+    max-height: 1px;
+    min-height: 1px;
+}
+
+/* ── Custom menu row ── */
+QLabel#menuRowText {
+    font-size: 14px;
+    color: __T_TEXT__;
+    background: transparent;
+}
+QFrame#menuRowSepLine {
+    background: __T_BORDER2__;
+    border: none;
+    max-height: 1px;
+    min-height: 1px;
+}
+
+/* ── Cover art dialog labels ── */
+QLabel#dialogMuted {
+    color: __T_TEXT6__;
+    font-size: 13px;
+    background: transparent;
+}
+QLabel#selectionStatus {
+    font-size: 13px;
+    background: transparent;
+    color: __T_TEXT6__;
+}
+QLabel#selectionStatus[status="ok"] { color: #34d399; }
+QLabel#selectionStatus[status="selected"] { color: #818cf8; }
+
+/* ── Store / GOG hints ── */
+QLabel#storeHintLbl {
+    color: #34d399;
+    font-size: 11px;
+    background: transparent;
+}
+QLabel#storeHintLblGog { color: #34d399; font-size: 11px; background: transparent; }
+
+/* ── ASI (Advanced Settings Info) label ── */
+QLabel#asiLabel {
+    color: #a78bfa;
+    font-size: 13px;
+    background: transparent;
+}
+
+/* ── Steam general info block ── */
+QLabel#steamGeneralInfo {
+    color: __T_TEXT4__;
+    font-size: 13px;
+    background: transparent;
+    line-height: 1.6;
+}
+
+/* ── Steam advanced warning ── */
+QLabel#steamAdvWarning {
+    color: #a78bfa;
+    font-size: 11px;
+    background: __T_STEAM_WARN_BG__;
+    border: 1px solid __T_STEAM_WARN_BORDER__;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+/* ── Cover dialog hint ── */
+QLabel#coverHintLbl {
+    color: __T_TEXT6__;
+    font-size: 12px;
+    background: transparent;
+}
+
+/* ── Dialog pill (cover search) ── */
+QLabel#dialogPill {
+    font-size: 12px;
+    background: transparent;
+}
+QLabel#dialogIdLbl {
+    font-size: 11px;
+    background: transparent;
+}
+
+/* ── Card size slider value label ── */
+QLabel#cardSizeVal {
+    font-size: 12px;
+    font-weight: 400;
+    color: __T_TEXT6__;
+}
+QLabel#cardSizeVal[atDefault="true"] {
+    font-weight: 700;
+    /* color set inline — needs accent */
+}
+
+/* ── Show-hidden button — base, accent colors via inline style on checked state ── */
+QPushButton#iconBtn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: __T_TEXT6__;
+}
+QPushButton#iconBtn:hover {
+    background: __T_HOVER2__;
+    color: __T_TEXT__;
+}
+
+/* ── Compat tool buttons ── */
+QPushButton#compatBtn {
+    background: __T_SURFACE__;
+    color: __T_TEXT2__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 13px;
+}
+QPushButton#compatBtn:hover {
+    background: __T_HOVER__;
+    border-color: __T_TEXT6__;
+}
+QPushButton#compatBtn:disabled {
+    color: __T_TEXT6__;
+    border-color: __T_BORDER3__;
+}
+
+/* ── Settings env-vars grid header labels ── */
+QLabel#envHdrKey, QLabel#envHdrVal {
+    font-size: 11px;
+    font-weight: 600;
+    color: __T_TEXT6__;
+    text-transform: uppercase;
+    background: transparent;
+}
+
+/* ── Proton count pill in settings ── */
+QLabel#protonCountPill {
+    font-size: 11px;
+    border-radius: 8px;
+    padding: 1px 8px;
+}
+
+/* ── Separator lines inside dialogs ── */
+QFrame#dialogSep {
+    background: __T_BORDER2__;
+    border: none;
+    max-height: 1px;
+    min-height: 1px;
+    margin: 6px 0;
+}
+QFrame#dialogSepFlush {
+    background: __T_BORDER2__;
+    border: none;
+    max-height: 1px;
+    min-height: 1px;
+    margin: 0;
+}
+/* Vertical variant — used for 1px-wide column separators in compat grid */
+QFrame#dialogSepV {
+    background: __T_BORDER2__;
+    border: none;
+    max-width: 1px;
+    min-width: 1px;
+}
+
+/* ── NAGOMessageBox title/message ── */
+QLabel#msgBoxTitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: __T_TEXT__;
+    background: transparent;
+}
+QLabel#msgBoxMessage {
+    font-size: 13px;
+    color: __T_TEXT4__;
+    background: transparent;
+    line-height: 1.5;
+}
+
+/* ── Transparent utility widgets ── */
+QWidget#transparentBg,
+QLabel#transparentBg,
+QFrame#transparentBg {
+    background: transparent;
+    border: none;
+}
+
+/* ── Drop zone (cover drag target) ── */
+QFrame#dropZone {
+    background: __T_SURFACE__;
+    border-radius: 6px;
+    border: 2px solid __T_BORDER2__;
+}
+QFrame#dropZone[dragOver="true"] {
+    border: 3px solid __ACCENT__;
+    background: __T_SURFACE_HOVER__;
+}
+
+/* ── Library scrollarea ── */
+QScrollArea#libraryScroll { background: __T_BG__; border: none; }
+QWidget#libraryGrid { background: __T_BG__; }
+QWidget#libraryViewport { background: __T_BG__; }
+QWidget#settingsIslandFull { background: transparent; border: none; }
