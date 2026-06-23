@@ -137,6 +137,12 @@ Edit the `Exec=` and `Icon=` lines in the `.desktop` file to point to your insta
 
 ---
 
+## Acknowledgements
+
+- Built with the assistance of [Claude](https://claude.ai) by Anthropic
+- AI upscaling powered by [linux-rt-upscaler](https://github.com/baronsmv/linux-rt-upscaler)
+- Save backups powered by [ludusavi](https://github.com/mtkennerly/ludusavi)
+
 ## License
 
 WIP
