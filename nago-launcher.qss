@@ -282,9 +282,9 @@ QPushButton#secondary:checked {
     border-color: __T_SEC_CHK_BORDER__;
 }
 QPushButton#secondary:disabled {
-    background: __T_SIDEBAR_BG__;
+    background: __T_DISABLED_BG__;
     color: __T_TEXT6__;
-    border-color: __T_BORDER3__;
+    border-color: __T_BORDER2__;
 }
 QPushButton#primary:disabled {
     background: __T_SURFACE__;
@@ -344,6 +344,25 @@ QFrame#dialogRoot {
     background: __T_DIALOG_BG__;
     border: 1px solid __T_BORDER2__;
     border-radius: 12px;
+}
+QListWidget {
+    background: __T_SURFACE2__;
+    border: 1px solid __T_BORDER2__;
+    border-radius: 8px;
+    padding: 4px;
+    color: __T_TEXT__;
+    outline: none;
+}
+QListWidget::item {
+    padding: 5px 8px;
+    border-radius: 5px;
+}
+QListWidget::item:selected {
+    background: __ACCENT__;
+    color: #ffffff;
+}
+QListWidget::item:hover:!selected {
+    background: __T_SURFACE_HOVER__;
 }
 QLabel#dlgTitle {
     font-size: 18px;

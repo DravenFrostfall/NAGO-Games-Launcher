@@ -41,7 +41,8 @@ from PyQt6.QtWidgets import (
     QFrame, QFileDialog, QDialog, QComboBox, QMessageBox,
     QStackedWidget, QSizePolicy, QMenu,
     QGraphicsOpacityEffect, QTabWidget, QSlider, QStyledItemDelegate,
-    QSystemTrayIcon, QButtonGroup, QRadioButton
+    QSystemTrayIcon, QButtonGroup, QRadioButton,
+    QListWidget, QAbstractItemView, QSizeGrip
 )
 from PyQt6.QtCore import (
     Qt, QThread, pyqtSignal, QTimer, QPoint, QEvent, QMimeData, QRect, QRectF, QSize, QObject,
@@ -115,7 +116,7 @@ sys.excepthook = _safe_excepthook
 # ── Constants ──────────────────────────────────────────────────────────────────
 APP_NAME = "NAGO"
 VERSION  = "1.0.0"
-BUILD    = "27-06-2026 00:35"
+BUILD    = "29-06-2026 17:33"
 
 # Locale-safe date helpers — always English month abbreviations regardless of system locale.
 _MONTH_ABBR = ("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
@@ -154,9 +155,15 @@ UMU_DB_CSV     = UMU_HOME / "umu-database.csv"
 LUDUSAVI_HOME       = TOOLS_HOME / "ludusavi"
 LUDUSAVI_BIN        = LUDUSAVI_HOME / "ludusavi"
 LUDUSAVI_CONFIG_DIR     = LUDUSAVI_HOME / "config"      # --config target dir
-LUDUSAVI_BACKUPS        = LUDUSAVI_HOME / "backups"     # default backup destination
-LUDUSAVI_MANUAL_BACKUPS = LUDUSAVI_BACKUPS              # manual: same root, no --path needed
-LUDUSAVI_AUTO_BACKUPS   = LUDUSAVI_BACKUPS / "_auto"    # auto: _auto/ prefix sorts to top
+# All save backups live under one root so they're not scattered across the tree.
+#   gamesaves/ludusavi/        ← ludusavi backups (manual + auto)
+#   gamesaves/ludusavi/_auto/  ← ludusavi auto-backups (sorts to top)
+#   gamesaves/manual/          ← raw-copy fallback backups
+NAGO_SAVE_BACKUPS       = NAGO_HOME / "gamesaves"          # single root for everything
+LUDUSAVI_BACKUPS        = NAGO_SAVE_BACKUPS / "ludusavi"   # default ludusavi destination
+LUDUSAVI_MANUAL_BACKUPS = LUDUSAVI_BACKUPS                 # manual: same root, no --path needed
+LUDUSAVI_AUTO_BACKUPS   = LUDUSAVI_BACKUPS / "_auto"       # auto: _auto/ prefix sorts to top
+NAGO_MANUAL_BACKUPS     = NAGO_SAVE_BACKUPS / "manual"     # raw-copy fallback when ludusavi finds nothing
 
 # Selector value meaning "let umu use its UMU-Proton default (no PROTONPATH set)".
 # Distinct from "" so the launch-path `or` fallthrough can't swallow an intentional
@@ -234,9 +241,12 @@ PH = {
     "dots-three-vertical":      0x0E208,
     # ── Files / Data ──────────────────────────────────────────────────────────
     "file-archive":             0x0EB2A,
+    "file-plus":                0x0E236,
     "folder":                   0x0E24A,
     "folder-open":              0x0E256,
     "folder-minus":             0x0E254,   # replaces folder-x (removed in v2.1)
+    "folder-plus":              0x0E258,
+    "folder-simple":            0x0E25A,
     "floppy-disk":              0x0E248,
     "image":                    0x0E2CA,
     "article":                  0x0E0A8,
@@ -328,7 +338,7 @@ class _NAGODialog(QDialog):
         _nago_types = tuple(
             _g[n] for n in ("NAGOComboBox", "NAGOCheckBox") if n in _g
         )
-        return isinstance(widget, (QPushButton, QLineEdit, QComboBox, QSlider, QScrollArea)
+        return isinstance(widget, (QPushButton, QLineEdit, QComboBox, QSlider, QScrollArea, QListWidget)
                           + _nago_types)
 
     def mousePressEvent(self, event):
@@ -3425,6 +3435,20 @@ class LudusaviFindWorker(_NAGOThread):
         # ambiguous/multi-title path — those go through the manual picker, which
         # does its own (authoritative) caching.
         self.autocacheable = False
+        # Set True when find concludes the game has no usable manifest entry:
+        # either _gather_candidates returned nothing (hard miss), OR the only
+        # candidates came from the weak fuzzy step and none resolved saves
+        # (garbage matches). Read by the failed-handlers to auto-disable per-game
+        # "Use Ludusavi". Stays False for exceptions (transient ludusavi errors)
+        # and for candidates from trustworthy steps that resolved no saves (a
+        # real in-manifest game may simply not be played yet), so neither
+        # transient case ever flips the toggle.
+        self.find_miss = False
+        # True when the surviving candidate set came from the fuzzy step (6),
+        # the weakest signal. Lets the verify loop tell garbage fuzzy matches
+        # (disable) apart from a real ID/name/folder match awaiting its first
+        # save (keep ludusavi on). Set in _gather_candidates.
+        self._candidates_were_fuzzy = False
 
     def run(self):
         try:
@@ -3527,6 +3551,7 @@ class LudusaviFindWorker(_NAGOThread):
                             self.autocacheable = True
                             self.resolved.emit([name])
                             return
+                self.find_miss = True   # genuine case-#1 miss: not in manifest
                 self.failed.emit(
                     f'No Ludusavi manifest entry found for "{name or "this game"}".\n\n'
                     'You can enter the exact PCGamingWiki title manually.'
@@ -3583,7 +3608,27 @@ class LudusaviFindWorker(_NAGOThread):
                     self.autocacheable = True
                     self.resolved.emit([name])
                 else:
-                    self.candidates.emit(candidates)
+                    # Candidates existed but NONE resolved real saves.
+                    _NAGOLog.session(
+                        f"[ludusavi][find] candidates found but none resolved saves "
+                        f"for '{name}' — discarding {candidates} and going manual"
+                    )
+                    if self._candidates_were_fuzzy:
+                        # Source was the weak fuzzy step (e.g. "Hellboy" for
+                        # "Hold Me Tight" sharing a word) — wrong games, not a
+                        # real in-manifest title. Treat as a genuine miss so the
+                        # handlers auto-disable Use Ludusavi, same as a hard miss.
+                        self.find_miss = True
+                        self.failed.emit(
+                            f'No matching Ludusavi save data for '
+                            f'"{name or "this game"}".'
+                        )
+                    else:
+                        # Source was a trustworthy step (ID / name / folder) but
+                        # nothing resolved — likely a real game whose save just
+                        # doesn't exist yet. Stay on ludusavi; fall through to a
+                        # manual raw-copy this time without disabling the toggle.
+                        self.candidates.emit([])
         except Exception as e:
             self.failed.emit(str(e))
 
@@ -3676,6 +3721,8 @@ class LudusaviFindWorker(_NAGOThread):
         _NAGOLog.session(
             f"{_tag} step 6 (fuzzy): {len(fuzzy_titles)} candidate(s): {fuzzy_titles}"
         )
+        if fuzzy_titles:
+            self._candidates_were_fuzzy = True   # weakest signal — see find_miss
         _add(fuzzy_titles)
         return out
 
@@ -3805,12 +3852,13 @@ class LudusaviFindWorker(_NAGOThread):
         return []
 
     @staticmethod
-    def _extract_titles_fuzzy(data: dict) -> list:
-        """Return fuzzy-search titles sorted by score descending, capped at 15.
+    def _extract_titles_fuzzy(data: dict, threshold: float = 0.6) -> list:
+        """Return fuzzy-search titles scoring >= threshold, sorted descending, capped at 15.
 
-        No score threshold -- the old 0.90 threshold had a broken fallback that
-        returned ALL results when nothing passed, making it worse than useless.
-        Capping at 15 is the real guard against verifying 70+ candidates.
+        threshold=0.6 filters garbage matches (e.g. "Hellboy: Dogs of the Night"
+        appearing for "Hold Me Tight All Night" because they share the word "Night").
+        Returning [] when nothing clears the bar is correct — it causes the backup
+        flow to fall through to manual raw-copy rather than presenting useless choices.
 
         Falls back to unsorted full list when no score data present (older
         ludusavi builds that don't emit a 'score' field).
@@ -3823,12 +3871,11 @@ class LudusaviFindWorker(_NAGOThread):
         scored = [(title, entry.get("score"))
                   for title, entry in games.items()
                   if isinstance(entry, dict)]
-        # If ludusavi returned score data, sort by it and cap at 15.
         if any(s is not None for _, s in scored):
-            scored_known = [(t, s if s is not None else 0.0) for t, s in scored]
+            scored_known = [(t, s) for t, s in scored if (s or 0.0) >= threshold]
             scored_known.sort(key=lambda x: x[1], reverse=True)
             return [t for t, _ in scored_known[:15]]
-        # No score data -- return all (older ludusavi build).
+        # No score data (older ludusavi build) — return all unsorted.
         return [t for t, _ in scored]
 
 
@@ -4019,6 +4066,307 @@ class LudusaviRestoreWorker(_NAGOThread):
             self.done.emit(summary)
         except Exception as e:
             self.failed.emit(str(e))
+
+
+class ManualBackupWorker(_NAGOThread):
+    """Raw-copy fallback backup when ludusavi finds nothing.
+    Copies each stored path (file or directory) into
+    NAGO_MANUAL_BACKUPS/<sanitized_title>/, replacing the destination."""
+    done   = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def __init__(self, game: dict, paths: list):
+        super().__init__()
+        self._game  = game
+        self._paths = paths
+
+    def run(self):
+        import datetime as _dt
+        title   = (self._game.get("name") or "game").strip()
+        safe    = _ludusavi_sanitize_title(title)
+        dest    = NAGO_MANUAL_BACKUPS / safe
+        staging = NAGO_MANUAL_BACKUPS / (safe + ".staging")
+        old     = NAGO_MANUAL_BACKUPS / (safe + ".old")
+        try:
+            # Copy into a staging folder first. The existing backup is NOT
+            # touched until we've confirmed there's something to replace it with,
+            # so backing up a game with no save files can never wipe a good backup.
+            if staging.exists():
+                shutil.rmtree(staging)
+            staging.mkdir(parents=True, exist_ok=True)
+            copied_files = 0
+            copied_bytes = 0
+            for p in self._paths:
+                src_path = Path(p)
+                if not src_path.exists():
+                    _NAGOLog.session(f"[manual-backup] skip missing: {p}")
+                    continue
+                if src_path.is_dir():
+                    dst = staging / src_path.name
+                    shutil.copytree(str(src_path), str(dst), dirs_exist_ok=True)
+                    for f in dst.rglob("*"):
+                        if f.is_file():
+                            copied_files += 1
+                            copied_bytes += f.stat().st_size
+                else:
+                    shutil.copy2(str(src_path), str(staging / src_path.name))
+                    copied_files += 1
+                    copied_bytes += src_path.stat().st_size
+
+            if copied_files == 0:
+                # Nothing to back up — discard staging, leave the old backup as-is.
+                shutil.rmtree(staging, ignore_errors=True)
+                _NAGOLog.session(
+                    f"[manual-backup] no files found for '{title}' — "
+                    f"existing backup left untouched"
+                )
+                self.failed.emit(
+                    "No save files were found to back up.\n\n"
+                    "Your existing backup was left untouched."
+                )
+                return
+
+            # Swap staging into place: move the current backup aside, move
+            # staging in, then drop the old one. Renames are within one folder
+            # (same filesystem), so each step is atomic.
+            if dest.exists():
+                if old.exists():
+                    shutil.rmtree(old, ignore_errors=True)
+                dest.rename(old)
+            staging.rename(dest)
+            if old.exists():
+                shutil.rmtree(old, ignore_errors=True)
+
+            self.done.emit({
+                "fileCount":  copied_files,
+                "totalBytes": copied_bytes,
+                "dest":       str(dest),
+                "stamp":      _fmt_stamp_short(_dt.datetime.now()),
+            })
+        except Exception as e:
+            # If we'd already moved the old backup aside, put it back so a
+            # failed swap never leaves the user with no backup.
+            try:
+                if not dest.exists() and old.exists():
+                    old.rename(dest)
+            except Exception:
+                pass
+            shutil.rmtree(staging, ignore_errors=True)
+            self.failed.emit(str(e))
+
+
+class ManualRestoreWorker(_NAGOThread):
+    """Reverse of ManualBackupWorker — copies backed-up files from
+    NAGO_MANUAL_BACKUPS/<title>/<basename> back to their original locations
+    stored in custom_save_paths. Overwrites live files (caller has confirmed)."""
+    done   = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def __init__(self, game: dict, paths: list):
+        super().__init__()
+        self._game  = game
+        self._paths = paths
+
+    def run(self):
+        title = (self._game.get("name") or "game").strip()
+        safe  = _ludusavi_sanitize_title(title)
+        src_root = NAGO_MANUAL_BACKUPS / safe
+        if not src_root.is_dir():
+            self.failed.emit("No manual backup found on disk.")
+            return
+        try:
+            restored = 0
+            for orig in self._paths:
+                orig_path = Path(orig)
+                basename  = orig_path.name
+                backup_item = src_root / basename
+                if not backup_item.exists():
+                    _NAGOLog.session(f"[manual-restore] backup missing for: {basename}")
+                    continue
+                if backup_item.is_dir():
+                    # Restore directory contents back into the original location
+                    orig_path.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(str(backup_item), str(orig_path), dirs_exist_ok=True)
+                    restored += sum(1 for f in backup_item.rglob("*") if f.is_file())
+                else:
+                    orig_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(str(backup_item), str(orig_path))
+                    restored += 1
+            self.done.emit({"restored": restored})
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
+class ManualPathsDialog(_NAGODialog):
+    """Select files/folders to back up manually for games ludusavi can't find."""
+
+    def __init__(self, game: dict, paths: list, parent=None,
+                 ok_label: str = "Back up now"):
+        super().__init__(parent)
+        self.setWindowTitle("Select save paths")
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        _min_w = 540 + self._SHADOW * 2
+        _min_h = 360 + self._SHADOW * 2
+        self.setMinimumSize(_min_w, _min_h)
+        self._paths = list(paths)
+        self._game  = game
+        self._start = ""
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(self._SHADOW, self._SHADOW, self._SHADOW, self._SHADOW)
+        outer.setSpacing(0)
+        root = QFrame()
+        root.setObjectName("dialogRoot")
+        outer.addWidget(root)
+
+        layout = QVBoxLayout(root)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 18, 20, 16)
+
+        title = QLabel("Select save paths")
+        title.setObjectName("dlgTitle")
+        layout.addWidget(title)
+
+        lbl = QLabel(
+            f"Select the files or folders that contain saves for "
+            f"<b>{game.get('name','')}</b>.<br>"
+            "These will be used for all future backups automatically."
+        )
+        lbl.setWordWrap(True)
+        layout.addWidget(lbl)
+
+        self._list = QListWidget()
+        self._list.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        for p in self._paths:
+            self._list.addItem(p)
+        layout.addWidget(self._list)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        add_folder = QPushButton("  Add folder…")
+        add_folder.setIcon(ph_icon("folder-plus", 18))
+        add_folder.setIconSize(QSize(18, 18))
+        add_folder.setObjectName("secondary")
+        add_folder.clicked.connect(self._add_folder)
+        add_file = QPushButton("  Add file…")
+        add_file.setIcon(ph_icon("file-plus", 18))
+        add_file.setIconSize(QSize(18, 18))
+        add_file.setObjectName("secondary")
+        add_file.clicked.connect(self._add_file)
+        self._remove_btn = QPushButton("  Remove")
+        self._remove_btn.setIcon(ph_icon("trash", 18))
+        self._remove_btn.setIconSize(QSize(18, 18))
+        self._remove_btn.setObjectName("secondary")
+        self._remove_btn.clicked.connect(self._remove_selected)
+        btn_row.addWidget(add_folder)
+        btn_row.addWidget(add_file)
+        btn_row.addStretch()
+        btn_row.addWidget(self._remove_btn)
+        layout.addLayout(btn_row)
+
+        dlg_btns = QHBoxLayout()
+        dlg_btns.setSpacing(8)
+        cancel = QPushButton("  Cancel")
+        cancel.setIcon(ph_icon("x", 18))
+        cancel.setIconSize(QSize(18, 18))
+        cancel.setObjectName("secondary")
+        cancel.clicked.connect(self.reject)
+        ok = QPushButton(f"  {ok_label}")
+        ok.setIcon(ph_icon("floppy-disk", 18))
+        ok.setIconSize(QSize(18, 18))
+        ok.setObjectName("primary")
+        ok.clicked.connect(self.accept)
+        dlg_btns.addStretch()
+        dlg_btns.addWidget(cancel)
+        dlg_btns.addWidget(ok)
+        layout.addLayout(dlg_btns)
+
+        # Bottom-right resize handle. On Wayland (Qt6) QSizeGrip routes through
+        # startSystemResize, the same primitive the main window uses.
+        self._grip = QSizeGrip(self)
+        self._grip.setFixedSize(16, 16)
+
+        # Restore the saved dialog size, falling back to a sensible default.
+        # Wrapped so a corrupt/hand-edited config.json can never break the dialog.
+        _saved = load_config().get("manual_paths_dialog", {})
+        try:
+            w = int(_saved.get("width", 0))
+            h = int(_saved.get("height", 0))
+        except (ValueError, TypeError):
+            w = h = 0
+        if w >= _min_w and h >= _min_h:
+            self.resize(w, h)
+        else:
+            self.resize(_min_w, 480 + self._SHADOW * 2)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Park the grip at the dialogRoot's inner bottom-right corner, just
+        # inside the shadow margin.
+        if hasattr(self, "_grip"):
+            s = self._SHADOW
+            self._grip.move(
+                self.width()  - s - self._grip.width(),
+                self.height() - s - self._grip.height(),
+            )
+            self._grip.raise_()
+
+    def done(self, r):
+        # Persist the current size on every close path (OK / Cancel / Esc).
+        try:
+            cfg = load_config()
+            cfg["manual_paths_dialog"] = {
+                "width": self.width(), "height": self.height()
+            }
+            save_config(cfg)
+        except Exception as e:
+            _NAGOLog.session(f"[warn] could not save manual-paths dialog size: {e}")
+        super().done(r)
+
+    def _browse_start(self) -> str:
+        if self._start:
+            return self._start
+        inst = (self._game.get("install_dir") or "").strip()
+        if inst:
+            return inst
+        exe = (self._game.get("exe_path") or "").strip()
+        return str(Path(exe).parent) if exe else str(Path.home())
+
+    def _add_folder(self):
+        picked = QFileDialog.getExistingDirectory(
+            self, "Choose a save folder", self._browse_start()
+        )
+        if not picked:
+            return
+        self._start = picked
+        if picked not in self._paths:
+            self._paths.append(picked)
+            self._list.addItem(picked)
+
+    def _add_file(self):
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Choose save files", self._browse_start()
+        )
+        for f in files:
+            if f not in self._paths:
+                self._paths.append(f)
+                self._list.addItem(f)
+        if files:
+            self._start = str(Path(files[0]).parent)
+
+    def _remove_selected(self):
+        row = self._list.currentRow()
+        if row < 0:
+            return
+        self._list.takeItem(row)
+        self._paths.pop(row)
+
+    def result_paths(self) -> list:
+        return list(self._paths)
+
 
 
 class WinetricksPresetWorker(_NAGOThread):
@@ -5174,20 +5522,195 @@ def _heroic_wine_prefix(app_name: str, is_flatpak: bool) -> str:
     return str(base / "prefixes" / "default" / app_name)
 
 
+def _xdg_desktop_entry_exists(desktop_ids: list[str]) -> bool:
+    """True if any of the given .desktop filenames exists in a standard
+    application directory — XDG_DATA_HOME/applications, each
+    XDG_DATA_DIRS/applications, or the Flatpak export dirs (user + system).
+
+    Cheap: direct existence checks on known filenames, no globbing. Catches
+    native packages, Flatpak (exported .desktop), and *integrated* AppImages.
+    A bare, un-integrated AppImage drops no entry and can't be detected here."""
+    app_dirs: list[Path] = [XDG_DATA / "applications"]
+    _data_dirs = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
+    for _d in _data_dirs.split(":"):
+        if _d.strip():
+            app_dirs.append(Path(_d.strip()) / "applications")
+    # Flatpak exports (user + system) — flatpak drops .desktop files here.
+    app_dirs.append(XDG_DATA / "flatpak" / "exports" / "share" / "applications")
+    app_dirs.append(Path("/var/lib/flatpak/exports/share/applications"))
+    for _dir in app_dirs:
+        for _did in desktop_ids:
+            try:
+                if (_dir / _did).exists():
+                    return True
+            except Exception:
+                continue
+    return False
+
+
+def _app_present(binary: str, desktop_ids: list[str]) -> bool:
+    """True if an application is installed *right now* — its binary is on
+    PATH (native packages, pip console scripts), or a launcher .desktop entry
+    exists (Flatpak export, packaged entry, integrated AppImage).
+
+    Deliberately does NOT treat a leftover config/data dir as proof of
+    installation: those survive an uninstall and caused false positives
+    (e.g. an import button staying enabled after the launcher was removed)."""
+    if shutil.which(binary):
+        return True
+    return _xdg_desktop_entry_exists(desktop_ids)
+
+
 def _is_steam_installed() -> bool:
-    """Cheap presence check for the Add-flow Import-source picker — reuses
-    find_steam_libraries()'s cached result rather than a fresh scan."""
-    return bool(find_steam_libraries())
+    """Gate for the Add-flow Import-source button: Steam installed *and* a
+    library present. AND'd so a leftover library after uninstall can't
+    enable the button on its own."""
+    return _app_present(
+        "steam", ["steam.desktop", "com.valvesoftware.Steam.desktop"]
+    ) and bool(find_steam_libraries())
 
 
 def _is_heroic_installed() -> bool:
-    """Cheap presence check for the Add-flow Import-source picker."""
-    return any(p.exists() for p in _heroic_library_paths())
+    """Gate for the Add-flow Import-source button: Heroic installed *and* its
+    config/library dir present. A bare un-integrated AppImage can't be
+    detected (no binary/desktop entry) — only native, Flatpak, and
+    integrated-AppImage installs are."""
+    return _app_present(
+        "heroic", ["com.heroicgameslauncher.hgl.desktop", "heroic.desktop"]
+    ) and any(p.exists() for p in _heroic_library_paths())
 
 
 def _is_lutris_installed() -> bool:
-    """Cheap presence check for the Add-flow Import-source picker."""
-    return any(p.exists() for p in _lutris_library_paths())
+    """Gate for the Add-flow Import-source button: Lutris installed *and* its
+    data/library dir present. AND'd so leftover ~/.local/share/lutris after an
+    uninstall can't keep the button enabled."""
+    return _app_present(
+        "lutris", ["net.lutris.Lutris.desktop", "lutris.desktop"]
+    ) and any(p.exists() for p in _lutris_library_paths())
+
+
+def _gog_resolve_exe(install_dir: str, game_id: str = "") -> str:
+    """Resolve the primary game executable inside a GOG install folder.
+
+    GOG installs don't always record the launch exe in the launcher's own
+    config — Minigalaxy never does, and Heroic occasionally doesn't either.
+    But the install folder itself carries the answer the same way GOG Galaxy
+    reads it. Resolution order mirrors how Minigalaxy/Galaxy locate the target:
+      1. goggame-<id>.info  →  playTasks[isPrimary].path   (authoritative)
+      2. native Linux        →  start.sh at the root
+      3. a 'Launch <Game>.lnk' shortcut
+      4. first non-blacklisted .exe (skips uninstallers / crash handlers)
+    Returns an absolute path, or "" if nothing usable is found.
+    """
+    try:
+        root = Path(install_dir)
+    except Exception:
+        return ""
+    if not install_dir or not root.is_dir():
+        return ""
+
+    names = {p.name for p in root.iterdir()}
+
+    # 2 first, but only for genuine native installs: a Windows install also
+    # ships unins000.exe, in which case start.sh (if any) is not the target.
+    if "unins000.exe" not in names and "start.sh" in names:
+        return str(root / "start.sh")
+
+    # 1. goggame-<id>.info primary play task — the reliable signal for Windows
+    #    installs (and the one Minigalaxy itself reads at launch).
+    info_files: list[Path] = []
+    if game_id:
+        p = root / f"goggame-{game_id}.info"
+        if p.exists():
+            info_files.append(p)
+    if not info_files:
+        info_files = sorted(root.glob("goggame-*.info"))
+    for info_file in info_files:
+        try:
+            info = json.loads(info_file.read_text(errors="ignore"))
+        except Exception:
+            continue
+        for task in info.get("playTasks", []):
+            if not task.get("isPrimary"):
+                continue
+            rel = (task.get("path") or "").strip().replace("\\", "/")
+            if not rel:
+                continue
+            cand = root / rel
+            if cand.exists():
+                return str(cand)
+
+    # 3. 'Launch <Game>.lnk' shortcut.
+    for p in sorted(root.glob("*.lnk")):
+        if p.name.lower().startswith("launch "):
+            return str(p)
+
+    # 4. First non-blacklisted .exe.
+    _ignore = {"unins000.exe", "unitycrashhandler64.exe",
+               "unitycrashhandler32.exe"}
+    for exe_p in sorted(root.glob("*.exe")):
+        if exe_p.name.lower() in _ignore:
+            continue
+        return str(exe_p)
+    return ""
+
+
+def _minigalaxy_install_dirs() -> list[Path]:
+    """GOG library roots Minigalaxy installs into.
+
+    Default is ~/GOG Games; a user-overridden 'install_dir' from Minigalaxy's
+    config.json (native or Flatpak) is preferred when present. All derived
+    dynamically — no hardcoded usernames or DE assumptions.
+    """
+    roots: list[Path] = []
+    cfg_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    cfg_candidates = [
+        cfg_home / "minigalaxy" / "config.json",
+        Path.home() / ".var" / "app" / "io.github.sharkwouter.Minigalaxy"
+        / "config" / "minigalaxy" / "config.json",
+    ]
+    for cfg in cfg_candidates:
+        try:
+            if cfg.exists():
+                data = json.loads(cfg.read_text(errors="ignore"))
+                d = (data.get("install_dir") or "").strip()
+                if d:
+                    p = Path(d).expanduser()
+                    if p not in roots:
+                        roots.append(p)
+        except Exception as e:
+            _NAGOLog.session(f"[warn] _minigalaxy_install_dirs: {cfg}: {e}")
+    default = Path.home() / "GOG Games"
+    if default not in roots:
+        roots.append(default)
+    return roots
+
+
+def _is_minigalaxy_installed() -> bool:
+    """Gate for the Add-flow Import-source button: Minigalaxy installed *and*
+    a GOG library/config present.
+
+    App presence is the binary on PATH or the Flatpak/native .desktop entry —
+    a leftover ~/.config/minigalaxy dir or a stray populated ~/GOG Games folder
+    is NOT proof on its own (both survive uninstall). Library/config is the
+    config dir or a non-empty install root. Both halves required."""
+    if not _app_present(
+        "minigalaxy",
+        ["io.github.sharkwouter.Minigalaxy.desktop", "minigalaxy.desktop"],
+    ):
+        return False
+    cfg_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    if (cfg_home / "minigalaxy").exists():
+        return True
+    if (Path.home() / ".var" / "app" / "io.github.sharkwouter.Minigalaxy").exists():
+        return True
+    for _root in _minigalaxy_install_dirs():
+        try:
+            if _root.is_dir() and any(_root.iterdir()):
+                return True
+        except Exception:
+            continue
+    return False
 
 
 # Cache file for GOG product ID → title lookups so we only hit the API once per ID.
@@ -5333,11 +5856,14 @@ def find_gog_games_heroic() -> list[dict]:
                 if exe_rel:
                     exe_abs = str(Path(install_path) / exe_rel.lstrip("/"))
                 else:
-                    # Try to find the main .exe in the install dir
-                    install_dir = Path(install_path)
-                    exes = list(install_dir.glob("*.exe"))
-                    if exes:
-                        exe_abs = str(exes[0])
+                    # Heroic didn't record an executable — resolve it the way GOG
+                    # installs are meant to be read (goggame-<id>.info primary play
+                    # task, then Launch .lnk / first real .exe) instead of grabbing
+                    # the first *.exe, which used to occasionally pick the
+                    # uninstaller. app_name is the numeric GOG product id for GOG
+                    # games, which lets the resolver find the right goggame info.
+                    exe_abs = _gog_resolve_exe(
+                        install_path, app_name if app_name.isdigit() else "")
 
                 # Title resolution priority:
                 # 1. library.json title_map (most reliable, full GOG title)
@@ -5483,11 +6009,78 @@ def find_gog_games_lutris() -> list[dict]:
     return results
 
 
+def find_gog_games_minigalaxy() -> list[dict]:
+    """Scan Minigalaxy's GOG installs.
+
+    Minigalaxy installs each game under <install_dir>/<Title>/ (default
+    ~/GOG Games) and records only the install dir + platform — never the exe.
+    So we resolve the exe the same way Minigalaxy does at launch, via
+    _gog_resolve_exe (goggame info → start.sh → Launch .lnk → real .exe).
+
+    NAGO owns the prefix: wine_prefix is always empty here, so NAGO's own
+    per-game prefix is used rather than Minigalaxy's <Title>/prefix folder.
+    """
+    results: list[dict] = []
+    seen: set[str] = set()
+
+    for root in _minigalaxy_install_dirs():
+        if not root.is_dir():
+            continue
+        try:
+            game_dirs = sorted(p for p in root.iterdir() if p.is_dir())
+        except Exception as e:
+            _NAGOLog.session(f"[warn] find_gog_games_minigalaxy: {root}: {e}")
+            continue
+
+        for game_dir in game_dirs:
+            # Native GOG installs nest the payload under data/noarch; check it
+            # first so start.sh / goggame info resolve against the real root.
+            cand_dirs = [game_dir]
+            noarch = game_dir / "data" / "noarch"
+            if noarch.is_dir():
+                cand_dirs.insert(0, noarch)
+
+            gid = ""
+            exe_abs = ""
+            chosen_root = ""
+            for cd in cand_dirs:
+                infos = sorted(cd.glob("goggame-*.info"))
+                if infos:
+                    m = re.search(r"goggame-(\d+)\.info", infos[0].name)
+                    gid = m.group(1) if m else gid
+                exe_abs = _gog_resolve_exe(str(cd), gid)
+                if exe_abs:
+                    chosen_root = str(cd)
+                    break
+            if not exe_abs:
+                continue
+
+            name = game_dir.name
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append({
+                "name":        name,
+                "exe_path":    exe_abs,
+                "install_dir": chosen_root or str(game_dir),
+                "wine_prefix": "",   # NAGO manages its own prefix
+                "source":      "Minigalaxy",
+                "app_name":    gid or name,
+            })
+
+    results.sort(key=lambda g: g["name"].lower())
+    return results
+
+
 def find_all_gog_games() -> list[dict]:
-    """Merge Heroic + Lutris results, deduplicating by name (case-insensitive)."""
+    """Merge Heroic + Lutris + Minigalaxy results, deduplicating by name
+    (case-insensitive)."""
     seen_names: set[str] = set()
     combined: list[dict] = []
-    for game in find_gog_games_heroic() + find_gog_games_lutris():
+    for game in (find_gog_games_heroic()
+                 + find_gog_games_lutris()
+                 + find_gog_games_minigalaxy()):
         key = game["name"].lower()
         if key not in seen_names:
             seen_names.add(key)
@@ -5550,6 +6143,7 @@ DARK_TOKENS: dict[str, str] = {
     "__T_TOPBAR_BG__":       "#1e1e22",
     "__T_DIALOG_BG__":       "#1d1d20",
     "__T_SECTION_BG__":      "#222227",
+    "__T_DISABLED_BG__":     "#26262b",
     "__T_CARD_BG__":         "#2a2a30",
     "__T_CARD_HOVER__":      "#32323a",
     "__T_ENV_HDR_BG__":      "#1a1a1e",
@@ -5621,6 +6215,7 @@ LIGHT_TOKENS: dict[str, str] = {
     "__T_TOPBAR_BG__":       "#fafafa",
     "__T_DIALOG_BG__":       "#ffffff",
     "__T_SECTION_BG__":      "#f0f0f4",
+    "__T_DISABLED_BG__":     "#e6e6ea",
     "__T_CARD_BG__":         "#ffffff",
     "__T_CARD_HOVER__":      "#f5f5fa",
     "__T_ENV_HDR_BG__":      "#f0f0f4",
@@ -6376,6 +6971,7 @@ def init_db():
             pre_launch_cmd  TEXT DEFAULT '',
             post_exit_cmd   TEXT DEFAULT '',
             auto_backup     INTEGER DEFAULT 0,
+            use_ludusavi    INTEGER DEFAULT 1,
             gamescope_enabled INTEGER DEFAULT 0,
             upscale_enabled INTEGER DEFAULT 0,
             upscale_model   TEXT DEFAULT 'fast',
@@ -6384,7 +6980,8 @@ def init_db():
             fsr4_upgrade    TEXT DEFAULT '',
             optiscaler_dll  TEXT DEFAULT '',
             fsr4_indicator  INTEGER DEFAULT 0,
-            install_dir     TEXT DEFAULT ''
+            install_dir     TEXT DEFAULT '',
+            custom_save_paths TEXT DEFAULT ''
         )
     """)
     # Migrate existing DBs that pre-date the umu_* columns
@@ -6422,6 +7019,8 @@ def init_db():
         ("optiscaler_dll",   "TEXT DEFAULT ''"),
         ("fsr4_indicator",   "INTEGER DEFAULT 0"),
         ("install_dir",      "TEXT DEFAULT ''"),
+        ("custom_save_paths", "TEXT DEFAULT ''"),
+        ("use_ludusavi",     "INTEGER DEFAULT 1"),
     ]:
         if col not in existing_cols:
             con.execute(f"ALTER TABLE games ADD COLUMN {col} {ddl}")
@@ -6460,6 +7059,7 @@ def init_db():
             pre_launch_cmd       TEXT DEFAULT '',
             post_exit_cmd        TEXT DEFAULT '',
             auto_backup          INTEGER DEFAULT 0,
+            use_ludusavi         INTEGER DEFAULT 1,
             ludusavi_title       TEXT DEFAULT '',
             gamescope_enabled    INTEGER DEFAULT 0,
             upscale_enabled      INTEGER DEFAULT 0,
@@ -6512,6 +7112,7 @@ def init_db():
         ("vn_jp_locale",      "INTEGER DEFAULT 0"),
         ("added_at",           "TEXT DEFAULT ''"),
         ("category_names",     "TEXT DEFAULT ''"),
+        ("use_ludusavi",       "INTEGER DEFAULT 1"),
     ]:
         if _pac not in pa_cols:
             con.execute(f"ALTER TABLE playtime_archive ADD COLUMN {_pac} {_padef}")
@@ -7982,17 +8583,28 @@ class GameCard(QFrame):
         # Open Saves Backup — only shown when a backup folder exists on disk.
         open_bk_act = None
         _bk_title = (self.game.get("ludusavi_title") or self.game.get("name") or "").strip()
+        _bk_name  = (self.game.get("name") or "").strip()
         _manual_bk = LUDUSAVI_MANUAL_BACKUPS / _ludusavi_sanitize_title(_bk_title) if _bk_title else None
         _auto_bk   = LUDUSAVI_AUTO_BACKUPS   / _ludusavi_sanitize_title(_bk_title) if _bk_title else None
+        # Raw-copy fallback backups live in a SEPARATE root (NAGO_MANUAL_BACKUPS),
+        # keyed on the game NAME, with NO mapping.yaml (ludusavi never touched
+        # them). The two ludusavi checks below would never see them — that's why
+        # "Open Saves Backup" was missing for manual (raw-copy) saves.
+        _raw_bk    = NAGO_MANUAL_BACKUPS / _ludusavi_sanitize_title(_bk_name) if _bk_name else None
         _bk_folder = None
         _manual_ok = bool(_manual_bk and _manual_bk.is_dir() and (_manual_bk / "mapping.yaml").exists())
         _auto_ok   = bool(_auto_bk   and _auto_bk.is_dir()   and (_auto_bk   / "mapping.yaml").exists())
-        if _manual_ok and _auto_ok:
+        _raw_ok    = bool(_raw_bk    and _raw_bk.is_dir()    and any(_raw_bk.iterdir()))
+        if _raw_ok and (_manual_ok or _auto_ok):
+            _bk_folder = NAGO_SAVE_BACKUPS         # spread across roots — open gamesaves root
+        elif _manual_ok and _auto_ok:
             _bk_folder = LUDUSAVI_BACKUPS          # both present — open root so both visible
         elif _manual_ok:
             _bk_folder = _manual_bk
         elif _auto_ok:
             _bk_folder = _auto_bk.parent           # _auto/ root
+        elif _raw_ok:
+            _bk_folder = _raw_bk
 
         # Open Game Folder — all game types
         _game_folder = _resolve_game_folder(self.game)
@@ -9194,7 +9806,8 @@ class GameDialog(_NAGODialog):
             _steam_ok      = _is_steam_installed()
             _heroic_ok     = _is_heroic_installed()
             _lutris_ok     = _is_lutris_installed()
-            _any_import_ok = _steam_ok or _heroic_ok or _lutris_ok
+            _minigalaxy_ok = _is_minigalaxy_installed()
+            _any_import_ok = _steam_ok or _heroic_ok or _lutris_ok or _minigalaxy_ok
 
             # ── Runner segmented control: Native / Proton / Import ────────
             # Each option carries its own active background + foreground so
@@ -9261,9 +9874,17 @@ class GameDialog(_NAGODialog):
                     if hasattr(self, "_row2_stack") and _val in ("native", "proton"):
                         self._row2_stack.setCurrentIndex(0)
                     if _val == "import":
-                        if self._import_src_btns:
+                        # Auto-select the first *enabled* source. The button list
+                        # now includes disabled (undetected) sources, so [0] could
+                        # be one that isn't installed. If none are enabled, pick
+                        # nothing — same as the old empty-row behaviour.
+                        _first_enabled = next(
+                            (b for b in self._import_src_btns if b.isEnabled()),
+                            None,
+                        )
+                        if _first_enabled is not None:
                             self._on_import_source_picked(
-                                self._import_src_btns[0].text().strip().lower()
+                                _first_enabled.text().strip().lower()
                             )
                     else:
                         for _isb in self._import_src_btns:
@@ -9330,17 +9951,28 @@ class GameDialog(_NAGODialog):
                 ("Steam",  "steam",  "steam",               _steam_ok),
                 ("Heroic", "heroic", "heroicgameslauncher",  _heroic_ok),
                 ("Lutris", "lutris", "lutris",               _lutris_ok),
+                ("Minigalaxy", "minigalaxy", "gogdotcom",    _minigalaxy_ok),
             )
             _si_color = "#18181b" if _current_theme() == "light" else "#ffffff"
+            # Dim grey for disabled (undetected) source icons — matches the
+            # #secondary:disabled text token (__T_TEXT6__) so the whole button
+            # reads greyed. store_icon bakes the colour in, so Qt won't dim it
+            # for us; we render the disabled variant explicitly.
+            _si_dis_color = "#a1a1aa" if _current_theme() == "light" else "#505058"
             for _il, _iv, _svg_name, _idetected in _IMPORT_SOURCES:
-                if not _idetected:
-                    continue
+                # Every source shows a button; undetected launchers render
+                # disabled (greyed via #secondary:disabled QSS) with a tooltip
+                # so the user can see the integration exists.
                 _ibtn = QPushButton(f"  {_il}")
-                _ibtn.setIcon(store_icon(_svg_name, 18, _si_color))
+                _ibtn.setIcon(store_icon(
+                    _svg_name, 18, _si_color if _idetected else _si_dis_color))
                 _ibtn.setIconSize(QSize(18, 18))
                 _ibtn.setObjectName("secondary")
                 _ibtn.setCheckable(True)
-                _ibtn.setFixedWidth(110)
+                _ibtn.setMinimumWidth(90)
+                _ibtn.setEnabled(_idetected)
+                if not _idetected:
+                    _ibtn.setToolTip(f"{_il} not found, or has no games to import")
                 _ibtn.clicked.connect(
                     lambda _=False, v=_iv: self._on_import_source_picked(v)
                 )
@@ -10870,21 +11502,35 @@ class GameDialog(_NAGODialog):
         title_row.setSpacing(8)
         title_row.addWidget(self._section_label("Save Backups"))
         title_row.addStretch()
+        self._bk_use_ludusavi_cb = NAGOCheckBox("Use Ludusavi")
+        self._bk_use_ludusavi_cb.setChecked(bool(self.game.get("use_ludusavi", 1)))
+        self._bk_use_ludusavi_cb.setToolTip(
+            "On: detect saves with Ludusavi, fall back to manual paths.\n"
+            "Off: skip detection and use this game's manual paths directly."
+        )
+        title_row.addWidget(self._bk_use_ludusavi_cb)
+        self._bk_auto_cb = NAGOCheckBox("Auto-backup")
+        self._bk_auto_cb.setChecked(bool(self.game.get("auto_backup", 0)))
+        self._bk_auto_cb.setToolTip("Automatically back up saves when the game exits.")
+        title_row.addWidget(self._bk_auto_cb)
+        v.addLayout(title_row)
+
+        # Manual / Auto backup status labels, plus the busy/prompt status —
+        # all on one shared row. _bk_status is hidden while idle, so the manual
+        # label sits at the left as before; when busy it shows here (and the
+        # idle labels hide via _bk_show_status) instead of crowding the title row.
+        info_row = QHBoxLayout()
+        info_row.setSpacing(12)
         self._bk_status = QLabel("")
         self._bk_status.setObjectName("fieldHint")
         self._bk_status.hide()
-        title_row.addWidget(self._bk_status)
-        v.addLayout(title_row)
-
-        # Manual / Auto backup status labels
-        info_row = QHBoxLayout()
-        info_row.setSpacing(12)
         self._bk_manual_lbl = QLabel("")
         self._bk_manual_lbl.setObjectName("fieldHint")
         self._bk_manual_lbl.hide()
         self._bk_auto_lbl = QLabel("")
         self._bk_auto_lbl.setObjectName("fieldHint")
         self._bk_auto_lbl.hide()
+        info_row.addWidget(self._bk_status)
         info_row.addWidget(self._bk_manual_lbl)
         info_row.addStretch()
         info_row.addWidget(self._bk_auto_lbl)
@@ -10917,11 +11563,15 @@ class GameDialog(_NAGODialog):
         self._bk_restore_btn.clicked.connect(self._on_restore)
         btn_row.addWidget(self._bk_backup_btn)
         btn_row.addWidget(self._bk_restore_btn)
+        self._bk_edit_paths_btn = QPushButton("  Edit paths…")
+        self._bk_edit_paths_btn.setIcon(ph_icon("folder-simple", 18))
+        self._bk_edit_paths_btn.setIconSize(QSize(18, 18))
+        self._bk_edit_paths_btn.setObjectName("secondary")
+        self._bk_edit_paths_btn.setToolTip("Edit the manually selected save paths for this game.")
+        self._bk_edit_paths_btn.clicked.connect(self._on_edit_manual_paths)
+        self._bk_edit_paths_btn.hide()
+        btn_row.addWidget(self._bk_edit_paths_btn)
         btn_row.addStretch()
-        self._bk_auto_cb = NAGOCheckBox("Auto-backup")
-        self._bk_auto_cb.setChecked(bool(self.game.get("auto_backup", 0)))
-        self._bk_auto_cb.setToolTip("Automatically back up saves when the game exits.")
-        btn_row.addWidget(self._bk_auto_cb)
         v.addLayout(btn_row)
 
         # Title-match picker (hidden until needed)
@@ -10976,7 +11626,8 @@ class GameDialog(_NAGODialog):
 
     def _bk_db_write(self, *, title: str = None, last_backup: str = None,
                      backup_location: str = None, backup_summary: str = None,
-                     last_auto_backup: str = None, auto_backup_summary: str = None):
+                     last_auto_backup: str = None, auto_backup_summary: str = None,
+                     use_ludusavi: int = None):
         gid = self.game.get("id")
         if not gid:
             return
@@ -10994,6 +11645,8 @@ class GameDialog(_NAGODialog):
                 con.execute("UPDATE games SET last_auto_backup=? WHERE id=?", (last_auto_backup, gid))
             if auto_backup_summary is not None:
                 con.execute("UPDATE games SET auto_backup_summary=? WHERE id=?", (auto_backup_summary, gid))
+            if use_ludusavi is not None:
+                con.execute("UPDATE games SET use_ludusavi=? WHERE id=?", (use_ludusavi, gid))
             con.commit()
             con.close()
         except Exception as e:
@@ -11051,18 +11704,66 @@ class GameDialog(_NAGODialog):
             self._bk_auto_lbl.hide()
 
         # Restore only makes sense when at least one backup exists on disk.
-        self._bk_restore_btn.setEnabled(manual_exists or auto_exists)
+        _manual_root = NAGO_MANUAL_BACKUPS / _ludusavi_sanitize_title(
+            (self.game.get("name") or "").strip()
+        )
+        _manual_raw_exists = _manual_root.is_dir() and any(_manual_root.iterdir())
+        self._bk_restore_btn.setEnabled(manual_exists or auto_exists or _manual_raw_exists)
+
+        # Show Edit paths... button only when custom paths are stored
+        if hasattr(self, "_bk_edit_paths_btn"):
+            has_paths = bool(self._load_custom_paths())
+            if has_paths:
+                self._bk_edit_paths_btn.show()
+            else:
+                self._bk_edit_paths_btn.hide()
+
+        # Show manual backup status if last backup was manual
+        if manual_summary and "manual" in (manual_summary or "").lower():
+            _m = f"Manual (raw copy): {last_manual}  ·  {manual_summary}"
+            self._bk_manual_lbl.setText(_m)
+            self._bk_manual_lbl.show()
+
+    def _bk_show_status(self, msg: str):
+        """Show busy/prompt status on the shared info row, hiding the idle
+        manual/auto lines so the status owns the row instead of sitting beside
+        them. Idle labels are restored by _refresh_backup_card."""
+        self._bk_manual_lbl.hide()
+        self._bk_auto_lbl.hide()
+        self._bk_status.setText(msg)
+        self._bk_status.show()
 
     def _bk_set_busy(self, busy: bool, msg: str = ""):
         if busy:
             self._bk_backup_btn.setEnabled(False)
             self._bk_restore_btn.setEnabled(False)
             if msg:
-                self._bk_status.setText(msg)
-                self._bk_status.show()
+                self._bk_show_status(msg)
         else:
             self._bk_status.hide()
             self._refresh_backup_card()
+
+    def _bk_flash(self, text: str, ok: bool = True):
+        """Flash the backup-info line green (success) or red (failure) for 5s
+        with a result summary, replacing it in place, then restore the real line.
+        Theme-aware."""
+        col = _t("#4ade80", "#16a34a") if ok else _t("#f87171", "#dc2626")
+        self._bk_manual_lbl.setText(text)
+        self._bk_manual_lbl.setStyleSheet(f"color: {col}; font-weight: 600;")
+        self._bk_manual_lbl.show()
+        # Restart the revert timer so back-to-back flashes don't fight.
+        if getattr(self, "_bk_flash_timer", None) is not None:
+            self._bk_flash_timer.stop()
+        self._bk_flash_timer = QTimer(self)
+        self._bk_flash_timer.setSingleShot(True)
+        self._bk_flash_timer.timeout.connect(self._bk_flash_clear)
+        self._bk_flash_timer.start(5000)
+
+    def _bk_flash_clear(self):
+        # Drop the inline color (back to the #fieldHint QSS rule) and let the
+        # normal refresh restore the real backup-info line.
+        self._bk_manual_lbl.setStyleSheet("")
+        self._refresh_backup_card()
 
     # -- Backup flow ----------------------------------------------------------
     # Runs find first, unless a cached title triggers the stored-title shortcut
@@ -11086,6 +11787,18 @@ class GameDialog(_NAGODialog):
         return ""
 
     def _on_backup_now(self):
+        # Per-game "Use Ludusavi" toggle (live from the checkbox). When off,
+        # skip detection and the install gate entirely — go straight to the
+        # manual paths (opens the picker if none are stored yet).
+        if hasattr(self, "_bk_use_ludusavi_cb") and not self._bk_use_ludusavi_cb.isChecked():
+            _NAGOLog.session(
+                f"[backup] Use Ludusavi off for '{self.game.get('name','')}' — manual path"
+            )
+            live_exe = self._current_exe_from_ui()
+            if live_exe:
+                self.game = dict(self.game, exe_path=live_exe)
+            self._trigger_manual_backup()
+            return
         if not LUDUSAVI_BIN.exists() and not shutil.which("ludusavi"):
             NAGOMessageBox.warning(self, "Ludusavi Not Installed",
                 "Install Ludusavi first from Settings -> Ludusavi.")
@@ -11150,7 +11863,7 @@ class GameDialog(_NAGODialog):
         n_done = len(self._bk_results) + 1
         self._bk_set_busy(True, f"Backing up ({n_done})...")
         self._bk_worker = LudusaviBackupWorker(self.game, title)
-        self._bk_worker.progress.connect(lambda m: (self._bk_status.setText(m), self._bk_status.show()))
+        self._bk_worker.progress.connect(lambda m: self._bk_show_status(m))
         self._bk_worker.done.connect(self._on_backup_one_done)
         self._bk_worker.failed.connect(self._on_backup_failed)
         self._bk_worker.finished.connect(self._bk_worker.deleteLater)
@@ -11172,13 +11885,10 @@ class GameDialog(_NAGODialog):
         if not good:
             _NAGOLog.session(
                 f"[ludusavi][backup] no saves found for '{self.game.get('name', '')}'  "
-                f"titles tried: {[r.get('resolvedTitle', '') for r in results]}"
+                f"titles tried: {[r.get('resolvedTitle', '') for r in results]}  "
+                f"— falling back to manual backup"
             )
-            self._refresh_backup_card()
-            self._bk_status.setText(
-                "No saves found — try Back up again and pick a different match"
-            )
-            self._bk_status.show()
+            self._trigger_manual_backup()
             return
         stamp = _fmt_stamp_short(_dt.datetime.now())
         # Persist the primary (first/largest) title as the diagnostic record.
@@ -11212,19 +11922,23 @@ class GameDialog(_NAGODialog):
         if _cache_title:
             _NAGOLog.session(f"[ludusavi][backup] cached title for shortcut: '{_cache_title}'")
         self._refresh_backup_card()
+        self._bk_flash(f"Backed up — {_summary}", ok=True)
 
     def _on_find_candidates(self, titles: list):
+        if not titles:
+            # Game not in ludusavi database — skip the combo and go straight
+            # to manual raw-copy backup.
+            _NAGOLog.session(
+                f"[backup] '{self.game.get('name','')}' not in ludusavi DB "
+                f"— falling back to manual backup"
+            )
+            self._bk_set_busy(False)
+            self._trigger_manual_backup()
+            return
         self._bk_match_combo.clear()
-        if titles:
-            for t in titles:
-                self._bk_match_combo.addItem(t, userData=t)
-            self._bk_status.setText("Pick the matching title:")
-            self._bk_status.show()
-        else:
-            self._bk_match_combo.addItem("(no match - type the exact PCGamingWiki title)")
-            self._bk_match_combo.setEditable(True)
-            self._bk_status.setText("Not recognized - enter the title manually:")
-            self._bk_status.show()
+        for t in titles:
+            self._bk_match_combo.addItem(t, userData=t)
+        self._bk_show_status("Pick the matching title:")
         self._bk_match_row.show()
         self._bk_backup_btn.setEnabled(True)
         self._bk_restore_btn.setEnabled(False)
@@ -11236,8 +11950,7 @@ class GameDialog(_NAGODialog):
         self._bk_match_combo.setEditable(False)
         for c in candidates:
             self._bk_match_combo.addItem(c, userData=c)
-        self._bk_status.setText("Multiple save folders found — pick the right one:")
-        self._bk_status.show()
+        self._bk_show_status("Multiple save folders found — pick the right one:")
         self._bk_match_row.show()
         self._bk_set_busy(False)
 
@@ -11281,23 +11994,269 @@ class GameDialog(_NAGODialog):
             self._backup_next_in_queue()
 
     def _on_find_failed(self, msg: str):
-        # find returned nothing -- show the manual picker with an empty combo.
         _NAGOLog.session(
             f"[ludusavi][find] failed for '{self.game.get('name', '')}'  reason: {msg}"
+            f" — falling back to manual backup"
         )
-        self._on_find_candidates([])
+        # Genuine manifest-miss (case #1): ludusavi has no entry for this game,
+        # so it can never resolve saves no matter how many times we run. Auto-
+        # disable the per-game "Use Ludusavi" toggle once — visible checkbox
+        # flip + immediate DB write — so future manual clicks AND auto-exit
+        # backups skip the wasted find and go straight to manual. NOT done for
+        # exception/timeout failures: find_miss stays False on those, so a
+        # transient ludusavi error never flips the toggle.
+        if (getattr(self._bk_find, "find_miss", False)
+                and hasattr(self, "_bk_use_ludusavi_cb")
+                and self._bk_use_ludusavi_cb.isChecked()):
+            self._bk_use_ludusavi_cb.setChecked(False)
+            self.game = dict(self.game, use_ludusavi=0)
+            self._bk_db_write(use_ludusavi=0)
+            _NAGOLog.session(
+                f"[backup] '{self.game.get('name','')}' has no ludusavi manifest "
+                f"entry — auto-disabled Use Ludusavi (switched to manual)"
+            )
+        self._bk_set_busy(False)
+        self._trigger_manual_backup()
+
+    # ── Manual raw-copy backup ────────────────────────────────────────────────
+
+    def _load_custom_paths(self) -> list:
+        """Read stored custom_save_paths from DB. Returns [] on missing/empty."""
+        raw = (self.game.get("custom_save_paths") or "").strip()
+        if not raw:
+            gid = self.game.get("id")
+            if gid:
+                try:
+                    con = db_con()
+                    row = con.execute(
+                        "SELECT custom_save_paths FROM games WHERE id=?", (gid,)
+                    ).fetchone()
+                    con.close()
+                    if row:
+                        raw = (row[0] or "").strip()
+                except Exception:
+                    pass
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+            return [str(p) for p in data if str(p).strip()] if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _save_custom_paths(self, paths: list):
+        """Persist custom_save_paths to DB and update the in-memory game dict."""
+        payload = json.dumps(paths, ensure_ascii=False)
+        gid = self.game.get("id")
+        if gid:
+            try:
+                con = db_con()
+                con.execute(
+                    "UPDATE games SET custom_save_paths=? WHERE id=?", (payload, gid)
+                )
+                con.commit()
+                con.close()
+            except Exception as e:
+                _NAGOLog.session(f"[manual-backup] failed to save custom paths: {e}")
+        self.game = dict(self.game, custom_save_paths=payload)
+
+    def _trigger_manual_backup(self):
+        """Entry point for manual raw-copy fallback.
+        Uses stored paths if present; opens ManualPathsDialog if not."""
+        paths = self._load_custom_paths()
+        if paths:
+            # Paths already known — back up silently without asking.
+            self._run_manual_backup(paths)
+        else:
+            # No paths stored yet — open picker.
+            self._open_manual_paths_dialog(after_accept="backup")
+
+    def _open_manual_paths_dialog(self, after_accept: str = "backup"):
+        """Open ManualPathsDialog. On accept, store paths then optionally backup."""
+        dlg = ManualPathsDialog(
+            self.game, self._load_custom_paths(), parent=self,
+            ok_label="Save" if after_accept == "edit" else "Back up now",
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            self._refresh_backup_card()
+            return
+        paths = dlg.result_paths()
+        # Always persist the accepted state — including an empty list. Clearing
+        # the list is a deliberate edit and MUST overwrite the stored paths,
+        # otherwise the next backup reads the stale previous list from the DB.
+        self._save_custom_paths(paths)
+        if not paths:
+            # Nothing selected — can't back up. Refresh; the next manual backup
+            # reopens this picker since no paths are stored.
+            self._refresh_backup_card()
+            return
+        if after_accept == "backup":
+            self._run_manual_backup(paths)
+        else:
+            self._refresh_backup_card()
+
+    def _run_manual_backup(self, paths: list):
+        """Start ManualBackupWorker with the given paths."""
+        self._bk_set_busy(True, "Backing up (manual)...")
+        self._manual_worker = ManualBackupWorker(self.game, paths)
+        self._manual_worker.done.connect(self._on_manual_backup_done)
+        self._manual_worker.failed.connect(self._on_manual_backup_failed)
+        self._manual_worker.finished.connect(self._manual_worker.deleteLater)
+        self._manual_worker.start()
+
+    def _on_manual_backup_done(self, result: dict):
+        import datetime as _dt
+        fc   = result.get("fileCount", 0)
+        mb   = result.get("totalBytes", 0) / (1024 * 1024)
+        stamp = result.get("stamp", _fmt_stamp_short(_dt.datetime.now()))
+        summary = f"{fc} file(s) ({mb:.1f} MB) — manual"
+        _NAGOLog.session(
+            f"[manual-backup] done  game='{self.game.get('name','')}'"
+            f"  files={fc}  size={mb:.2f} MB  dest='{result.get('dest','')}'"
+        )
+        self._bk_db_write(last_backup=stamp, backup_location="manual",
+                          backup_summary=summary)
+        self._refresh_backup_card()
+        self._bk_flash(f"Backed up — {fc} file(s) ({mb:.1f} MB)", ok=True)
+
+    def _on_manual_backup_failed(self, msg: str):
+        _NAGOLog.session(
+            f"[manual-backup] failed  game='{self.game.get('name','')}'"
+            f"  reason={msg}"
+        )
+        self._refresh_backup_card()
+        self._bk_flash("Backup failed", ok=False)
+        NAGOMessageBox.warning(self, "Manual Backup Failed", msg)
+
+    def _on_edit_manual_paths(self):
+        """Open ManualPathsDialog to let the user update stored paths."""
+        self._open_manual_paths_dialog(after_accept="edit")
+
+    # ── Manual restore (raw-copy reverse) ─────────────────────────────────────
+
+    def _restore_manual(self):
+        """Restore a manual raw-copy backup, prompting on file conflicts with
+        age info so the user can see which copy is newer before overwriting."""
+        import datetime as _dt
+        paths = self._load_custom_paths()
+        if not paths:
+            NAGOMessageBox.warning(self, "No Saved Paths",
+                "No save paths are stored for this game.")
+            return
+        title = (self.game.get("name") or "").strip()
+        safe  = _ludusavi_sanitize_title(title)
+        src_root = NAGO_MANUAL_BACKUPS / safe
+
+        # Build a conflict report: live files that already exist and would be
+        # overwritten, with backup vs live modification times.
+        def _newest_mtime(p: "Path") -> float:
+            if p.is_dir():
+                times = [f.stat().st_mtime for f in p.rglob("*") if f.is_file()]
+                return max(times) if times else 0.0
+            try:
+                return p.stat().st_mtime
+            except Exception:
+                return 0.0
+
+        conflicts = []
+        for orig in paths:
+            orig_path   = Path(orig)
+            backup_item = src_root / orig_path.name
+            if not backup_item.exists():
+                continue
+            if orig_path.exists():
+                conflicts.append((
+                    orig_path.name,
+                    _newest_mtime(backup_item),
+                    _newest_mtime(orig_path),
+                ))
+
+        if conflicts:
+            def _fmt(ts: float) -> str:
+                if ts <= 0:
+                    return "unknown"
+                return _dt.datetime.fromtimestamp(ts).strftime("%d-%m-%Y %H:%M")
+            lines = []
+            for name, bk_ts, live_ts in conflicts:
+                if bk_ts > live_ts:
+                    rel = "backup is newer"
+                elif live_ts > bk_ts:
+                    rel = "current is newer"
+                else:
+                    rel = "same age"
+                lines.append(
+                    f"• {name}\n"
+                    f"     backup:  {_fmt(bk_ts)}\n"
+                    f"     current: {_fmt(live_ts)}   ({rel})"
+                )
+            body = (
+                f"These files already exist and will be overwritten when "
+                f"restoring \"{title}\":\n\n"
+                + "\n".join(lines)
+                + "\n\nOverwrite current saves with the backup?"
+            )
+            if NAGOMessageBox.question(self, "Restore Saves", body) \
+                    != QMessageBox.StandardButton.Yes:
+                return
+        # No conflicts: nothing would be overwritten, so restore silently
+        # without prompting.
+
+        self._bk_set_busy(True, "Restoring (manual)...")
+        self._manual_restore_worker = ManualRestoreWorker(self.game, paths)
+        self._manual_restore_worker.done.connect(self._on_manual_restore_done)
+        self._manual_restore_worker.failed.connect(self._on_manual_restore_failed)
+        self._manual_restore_worker.finished.connect(
+            self._manual_restore_worker.deleteLater
+        )
+        self._manual_restore_worker.start()
+
+    def _on_manual_restore_done(self, result: dict):
+        n = result.get("restored", 0)
+        _NAGOLog.session(
+            f"[manual-restore] done  game='{self.game.get('name','')}'  files={n}"
+        )
+        self._refresh_backup_card()
+        self._bk_flash(f"Restored {n} file(s)", ok=True)
+
+    def _on_manual_restore_failed(self, msg: str):
+        _NAGOLog.session(
+            f"[manual-restore] failed  game='{self.game.get('name','')}'  reason={msg}"
+        )
+        self._refresh_backup_card()
+        self._bk_flash("Restore failed", ok=False)
+        NAGOMessageBox.warning(self, "Restore Failed", msg)
 
     def _on_backup_failed(self, msg: str):
         _NAGOLog.session(
             f"[ludusavi][backup] failed for '{self.game.get('name', '')}'  reason: {msg}"
         )
         self._refresh_backup_card()
+        self._bk_flash("Backup failed", ok=False)
         NAGOMessageBox.warning(self, "Backup Failed", msg)
 
     # -- Restore flow ---------------------------------------------------------
     # Also runs find first -- same reasoning as backup.
 
     def _on_restore(self):
+        # ── Manual backup restore (raw-copy) ──────────────────────────────
+        # If a manual backup exists on disk for this game, restore from it.
+        # This runs BEFORE the ludusavi gate so manual-only games aren't
+        # blocked when ludusavi isn't installed. If a ludusavi backup also
+        # exists, prefer whichever the last backup was (backup_location).
+        _bk_location = ""
+        try:
+            _, _, _bk_location, _, _, _ = self._bk_db_read()
+        except Exception:
+            _bk_location = ""
+        _manual_root = NAGO_MANUAL_BACKUPS / _ludusavi_sanitize_title(
+            (self.game.get("name") or "").strip()
+        )
+        _manual_backup_exists = _manual_root.is_dir() and any(_manual_root.iterdir())
+        if _manual_backup_exists and (_bk_location == "manual" or
+                                      not (LUDUSAVI_BIN.exists() or shutil.which("ludusavi"))):
+            self._restore_manual()
+            return
+
         if not LUDUSAVI_BIN.exists() and not shutil.which("ludusavi"):
             NAGOMessageBox.warning(self, "Ludusavi Not Installed",
                 "Install Ludusavi first from Settings -> Ludusavi.")
@@ -11434,7 +12393,7 @@ class GameDialog(_NAGODialog):
         self._bk_set_busy(True, f"Restoring ({n_done})...")
         self._bk_worker = LudusaviRestoreWorker(self.game, title,
                                                 restore_root=getattr(self, "_bk_restore_root", ""))
-        self._bk_worker.progress.connect(lambda m: (self._bk_status.setText(m), self._bk_status.show()))
+        self._bk_worker.progress.connect(lambda m: self._bk_show_status(m))
         self._bk_worker.done.connect(self._on_restore_one_done)
         self._bk_worker.failed.connect(self._on_restore_failed)
         self._bk_worker.finished.connect(self._bk_worker.deleteLater)
@@ -11455,19 +12414,18 @@ class GameDialog(_NAGODialog):
         good = [r for r in results if r.get("processedGames", 0) >= 1]
         self._refresh_backup_card()
         if not good:
-            self._bk_status.setText("Nothing restored — no backup data found")
-            self._bk_status.show()
+            self._bk_flash("Nothing restored — no backup data found", ok=False)
             return
         total_mb = sum(r.get("totalBytes", 0) for r in good) / (1024 * 1024)
         total_files = sum(r.get("fileCount", 0) for r in good)
-        self._bk_status.setText(f"Restored {total_files} file(s) ({total_mb:.1f} MB)")
-        self._bk_status.show()
+        self._bk_flash(f"Restored {total_files} file(s) ({total_mb:.1f} MB)", ok=True)
 
     def _on_restore_failed(self, msg: str):
         _NAGOLog.session(
             f"[ludusavi][restore] failed for '{self.game.get('name', '')}'  reason: {msg}"
         )
         self._refresh_backup_card()
+        self._bk_flash("Restore failed", ok=False)
         NAGOMessageBox.warning(self, "Restore Failed", msg)
 
     def _open_cover_picker(self):
@@ -11932,6 +12890,9 @@ class GameDialog(_NAGODialog):
         elif source == "lutris":
             games = find_gog_games_lutris()
             _src_label = "Lutris"
+        elif source == "minigalaxy":
+            games = find_gog_games_minigalaxy()
+            _src_label = "Minigalaxy"
         else:
             games = find_all_gog_games()
             _src_label = ""
@@ -13293,6 +14254,7 @@ class GameDialog(_NAGODialog):
             "pre_launch_cmd":      self.pre_launch_input.text().strip(),
             "post_exit_cmd":       self.post_exit_input.text().strip(),
             "auto_backup":         1 if (hasattr(self, "_bk_auto_cb") and self._bk_auto_cb.isChecked()) else 0,
+            "use_ludusavi":        (1 if self._bk_use_ludusavi_cb.isChecked() else 0) if hasattr(self, "_bk_use_ludusavi_cb") else 1,
             # Steam games can't use any of HDR/gamescope/upscale — NAGO doesn't
             # own their launch path. If a user switched from Proton→Steam in the
             # dialog the checkboxes get hidden but their state would otherwise
@@ -16198,6 +17160,72 @@ class LibraryPage(QWidget):
         _set_pill("running")
         _NAGOLog.session(f"[auto-backup] starting for game {gid} '{game.get('name','')}'")
 
+        # Per-game "Use Ludusavi" off → raw-copy the stored manual paths instead
+        # of running ludusavi. No dialog can open mid-exit, so if no paths are
+        # stored we fail the pill rather than prompting.
+        if not int(game.get("use_ludusavi", 1) or 0):
+            raw = (game.get("custom_save_paths") or "").strip()
+            paths = []
+            if raw:
+                try:
+                    data = json.loads(raw)
+                    if isinstance(data, list):
+                        paths = [str(p) for p in data if str(p).strip()]
+                except Exception:
+                    paths = []
+            if not paths:
+                _set_pill("failed")
+                _NAGOLog.session(
+                    f"[auto-backup] Use Ludusavi off but no manual paths for "
+                    f"game {gid} '{game.get('name','')}' — skipped"
+                )
+                return
+            _NAGOLog.session(
+                f"[auto-backup] Use Ludusavi off — manual raw copy for game {gid} "
+                f"'{game.get('name','')}'"
+            )
+            mbk = ManualBackupWorker(game, paths)
+
+            def _on_manual_done(result: dict) -> None:
+                import datetime as _dt
+                fc = result.get("fileCount", 0)
+                mb = result.get("totalBytes", 0) / (1024 * 1024)
+                stamp = result.get("stamp", _fmt_stamp_short(_dt.datetime.now()))
+                summary = f"{fc} file(s) ({mb:.1f} MB) — manual"
+                # Write the SAME fields a manual-click backup writes, so the card's
+                # "Manual (raw copy)" line and restore routing stay consistent.
+                try:
+                    con2 = db_con()
+                    con2.execute(
+                        "UPDATE games SET last_backup=?, backup_summary=?, "
+                        "backup_location=? WHERE id=?",
+                        (stamp, summary, "manual", gid),
+                    )
+                    con2.commit()
+                    con2.close()
+                except Exception as e:
+                    _NAGOLog.session(
+                        f"[auto-backup] manual DB write failed for game {gid}: {e}"
+                    )
+                _set_pill("success")
+                _NAGOLog.session(
+                    f"[auto-backup] manual success  game {gid} '{game.get('name','')}'  "
+                    f"files={fc}  size={mb:.2f} MB"
+                )
+                _cleanup(mbk)
+
+            def _on_manual_failed(msg: str) -> None:
+                _set_pill("failed")
+                _NAGOLog.session(f"[auto-backup] manual failed game {gid}: {msg}")
+                _cleanup(mbk)
+
+            mbk.done.connect(_on_manual_done)
+            mbk.failed.connect(_on_manual_failed)
+            mbk.finished.connect(mbk.deleteLater)
+            mbk.start()
+            self._auto_bk_workers.setdefault(gid, []).append(mbk)
+            return
+
         stored_title = (game.get("ludusavi_title") or "").strip()
         game_for_find = dict(game, ludusavi_title=stored_title)
 
@@ -16245,6 +17273,25 @@ class LibraryPage(QWidget):
         def _on_find_failed(msg: str) -> None:
             _set_pill("failed")
             _NAGOLog.session(f"[auto-backup] find failed game {gid}: {msg}")
+            # Genuine manifest-miss → auto-disable Use Ludusavi in the DB so the
+            # next exit skips find entirely and goes straight to manual. Silent:
+            # no dialog can open mid-exit, so the flipped state just shows next
+            # time the backup card is opened. Skipped for exception/timeout
+            # failures (find_miss stays False on those).
+            if getattr(find_worker, "find_miss", False) and int(game.get("use_ludusavi", 1) or 0):
+                try:
+                    con3 = db_con()
+                    con3.execute("UPDATE games SET use_ludusavi=0 WHERE id=?", (gid,))
+                    con3.commit()
+                    con3.close()
+                    _NAGOLog.session(
+                        f"[auto-backup] '{game.get('name','')}' has no ludusavi "
+                        f"manifest entry — auto-disabled Use Ludusavi"
+                    )
+                except Exception as e:
+                    _NAGOLog.session(
+                        f"[auto-backup] use_ludusavi disable failed game {gid}: {e}"
+                    )
             _cleanup(find_worker)
 
         find_worker.resolved.connect(_on_resolved)
@@ -16597,7 +17644,7 @@ class LibraryPage(QWidget):
                                  no_esync=?, no_fsync=?, no_ntsync=?,
                                  legacy_mediaconv=?, video_decode_mode=?,
                                  pre_launch_cmd=?, post_exit_cmd=?,
-                                 auto_backup=?,
+                                 auto_backup=?, use_ludusavi=?,
                                  gamescope_enabled=?,
                                  upscale_enabled=?, upscale_model=?,
                                  hdr_enabled=?, hdr_monitor=?, gog_id=?,
@@ -16611,6 +17658,7 @@ class LibraryPage(QWidget):
                   d.get("legacy_mediaconv", 0), d.get("video_decode_mode", "default"),
                   d["pre_launch_cmd"], d["post_exit_cmd"],
                   d.get("auto_backup", 0),
+                  d.get("use_ludusavi", 1),
                   d.get("gamescope_enabled", 0),
                   d.get("upscale_enabled", 0), d.get("upscale_model", "fast"),
                   d.get("hdr_enabled", 0), d.get("hdr_monitor", ""), d.get("gog_id", ""),
@@ -19129,7 +20177,7 @@ class MainWindow(QMainWindow):
                                        no_esync, no_fsync, no_ntsync,
                                        legacy_mediaconv, video_decode_mode,
                                        pre_launch_cmd, post_exit_cmd,
-                                       auto_backup,
+                                       auto_backup, use_ludusavi,
                                        gamescope_enabled,
                                        upscale_enabled, upscale_model,
                                        hdr_enabled, hdr_monitor,
@@ -19138,7 +20186,7 @@ class MainWindow(QMainWindow):
                                        install_dir,
                                        sort_pos, added_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                            ?,
+                            ?, ?,
                             (SELECT COALESCE(MAX(sort_pos), 0) + 1 FROM games),
                             datetime('now'))
                 """, (d["name"], d["exe_path"], d["game_type"], d["proton_path"],
@@ -19149,6 +20197,7 @@ class MainWindow(QMainWindow):
                       d.get("legacy_mediaconv", 0), d.get("video_decode_mode", "default"),
                       d["pre_launch_cmd"], d["post_exit_cmd"],
                       d.get("auto_backup", 0),
+                      d.get("use_ludusavi", 1),
                       d.get("gamescope_enabled", 0),
                       d.get("upscale_enabled", 0), d.get("upscale_model", "fast"),
                       d.get("hdr_enabled", 0), d.get("hdr_monitor", ""),
